@@ -11,6 +11,8 @@ With other permutations, they trace out more interesting paths.
 Regardless, they all eventually quiesce. 
 When that happens, move on to the next permutation.
 
+Also their paths change color from blue to pink based on how close to their crush they are.
+
 This is hosted at https://dreeves.github.io/swuzzle
 
 ## Changelog
