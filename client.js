@@ -31,7 +31,7 @@ let si = [] // state of each swimmer (hot or cold)
 function instructions() {
   stroke('Black'); fill('White')
   textSize(15)
-  const thecopy = `Dancing Swimmers
+  const thecopy = `Amorous Swimmers
 
 ${" ".repeat(35)}   (${width}x${height} pixels)`
   text(thecopy, 5, 15)
