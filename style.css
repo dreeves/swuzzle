@@ -1,5 +1,12 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* ensures no scrollbars for firefox? */
+}
+
 canvas {
-  position: absolute;
-  top:  0px;
-  left: 0px;
+  position: absolute;  /* or `fixed` would work too maybe? */
+  top: 0;
+  left: 0;
+  display: block;      /* kills the inline baseline gap, per ChatGPT */
 }
