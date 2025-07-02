@@ -20,6 +20,7 @@ let swm = [] // list of swimmers
 let n = 0 // number of iterations (permutations) drawn so far
 let dline = '' // text line with the distance
 let xyline = '' // x and y distances
+let crushline = '' // text line with crush relationships
 let ci = [] // indexes of crushes
 let di = [] // initial distances from crushes
 let si = [] // state of each swimmer (hot or cold)
@@ -46,21 +47,16 @@ function rainbar() {
 }
 
 function infoup() {
-  textSize(30)
-  const dw  = textWidth(dline)+3
-  const xyw = textWidth(xyline)+3
-  textSize(30); noStroke(); fill('Black')
+  crushline = `Crushes: ${ci.map((crush, swimmer) => `${swimmer}→${crush}`).join(', ')}`
   
-  rect(0, height-infoh*2-3, dw,  infoh+2)
-  rect(0, height-infoh,     xyw, infoh+2)
-  rect(dw, height-infoh+11, dw, infoh+2)
-  //dline = `d: ${sdist()}`
-  xyline = `x,y = ${swm[1][0]-swm[0][0]}, ${swm[0][1]-swm[1][1]}`
+  textSize(15)
+  const crushw = textWidth(crushline)+3
+  textSize(15); noStroke(); fill('Black')
+  
+  rect(0, height-infoh-3, crushw, infoh+2)
   stroke('Black'); fill('White')
-  //text(dline,  3, height - infoh - 3*2)
-  //text(xyline, 3, height-3)
-  textSize(15); fill(1, 0, .3)
-  textSize(30)
+  text(crushline, 3, height-3)
+  textSize(15)
   //stroke('white') 
 }
 
@@ -137,6 +133,78 @@ function pairstep(p1, p2, step) {
   return d < step ? p1 : midpoint(p1, p2, step / d)
 }
 
+// Generate mini swimmer positions for corner graph (HT Codebuff)
+function genMiniSwimmers(n, centerX, centerY, radius) {
+  let a = []
+  if      (n===3)  a = [[centerX-radius*0.5, centerY-radius*0.3], [centerX+radius*0.5, centerY-radius*0.3], [centerX, centerY+radius*0.6]]
+  else if (n===4)  a = [[centerX+radius*0.7, centerY-radius*0.7], [centerX-radius*0.7, centerY-radius*0.7], [centerX-radius*0.7, centerY+radius*0.7], [centerX+radius*0.7, centerY+radius*0.7]]
+  else if (n%2==0) a = range(n).map(i => [centerX + radius * cos(i*TAU/n), centerY - radius * sin(i*TAU/n)])
+  else             a = range(n).map(i => [centerX + radius * cos(i/n*TAU + (1/4-1/n)*TAU), centerY - radius * sin(i/n*TAU + (1/4-1/n)*TAU)])
+  return a
+}
+
+// Draw arrow from point a to point b
+function drawArrow(a, b, arrowSize = 6) {
+  stroke('White')
+  strokeWeight(1.5)
+  
+  // Shorten the line so arrow doesn't overlap with nodes
+  const angle = Math.atan2(b[1] - a[1], b[0] - a[0])
+  const startX = a[0] + 8 * cos(angle)
+  const startY = a[1] + 8 * sin(angle)
+  const endX = b[0] - 8 * cos(angle)
+  const endY = b[1] - 8 * sin(angle)
+  
+  line(startX, startY, endX, endY)
+  
+  // Draw arrowhead
+  const x1 = endX - arrowSize * cos(angle - 0.5)
+  const y1 = endY - arrowSize * sin(angle - 0.5)
+  const x2 = endX - arrowSize * cos(angle + 0.5)
+  const y2 = endY - arrowSize * sin(angle + 0.5)
+  
+  line(endX, endY, x1, y1)
+  line(endX, endY, x2, y2)
+  
+  strokeWeight(1) // Reset stroke weight
+}
+
+// Draw mini graph in corner
+function drawMiniGraph() {
+  const graphSize = 120
+  const centerX = width - graphSize/2 - 20
+  const centerY = graphSize/2 + 10  // Moved up from +50 to +10
+  const radius = 40
+  
+  // Background
+  noStroke()
+  fill(0, 0, 0, 0.7)
+  rect(width - graphSize - 30, 0, graphSize + 20, graphSize + 20)  // Moved up from y=40 to y=0
+  
+  const miniPos = genMiniSwimmers(ns, centerX, centerY, radius)
+  
+  // Draw arrows
+  for (let i = 0; i < ns; i++) {
+    if (i !== ci[i]) { // Don't draw self-arrows
+      drawArrow(miniPos[i], miniPos[ci[i]], 4)
+    }
+  }
+  
+  // Draw nodes
+  for (let i = 0; i < ns; i++) {
+    noStroke()
+    fill('White')
+    ellipse(miniPos[i][0], miniPos[i][1], 12)
+    fill('Black')
+    textAlign(CENTER, CENTER)
+    textSize(10)
+    text(i, miniPos[i][0], miniPos[i][1])
+  }
+  
+  // Reset text alignment
+  textAlign(LEFT, BASELINE)
+}
+
 // -----------------------------------------------------------------------------
 // Special p5.js functions -----------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -170,6 +238,8 @@ function draw() {
   }
   //swm.map(p => { ellipse(p[0], p[1], 1) })
   //infoup()
+  //noStroke() // Restore no stroke for swimmers
+  drawMiniGraph()
 }
 
 function setup() {
@@ -195,10 +265,12 @@ function setup() {
   //swm.map(p => { ellipse(p[0], p[1], 8) })
   
   instructions()
-  rainbar()
+  rainbar()  
   //stroke('white')
 }
 
 // -----------------------------------------------------------------------------
 // Bad ideas go below
 // -----------------------------------------------------------------------------
+
+
