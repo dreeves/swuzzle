@@ -16,6 +16,7 @@ nextperm, nthperm,
 
 const ns = 5 // number of swimmers
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
+const totperms = range(ns).reduce((a, b) => a * (b+1), 1) // ns factorial
 let swm = [] // list of swimmers
 let n = 0 // number of iterations (permutations) drawn so far
 let dline = '' // text line with the distance
@@ -240,6 +241,10 @@ function draw() {
   //infoup()
   //noStroke() // Restore no stroke for swimmers
   drawMiniGraph()
+  // Progress bar: thin strip across the bottom
+  noStroke()
+  fill(1, 0, 0.4)                          // muted white
+  rect(0, height - 4, width * n / totperms, 4)
 }
 
 function setup() {
