@@ -23,10 +23,13 @@ HTMLCanvasElement.prototype.getContext = function(type, attrs = {}) {
 
 const ns = 5 // number of swimmers
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
-const totperms = range(ns).reduce((a, b) => a * (b+1), 1) // ns factorial
+const nfact = range(ns).reduce((a, b) => a * (b+1), 1) // ns factorial
+// Derangements: permutations with no fixed points (every swimmer chases someone else)
+const derangements = range(nfact).map(i => nthperm(ns, i))
+                                 .filter(p => p.every((v, i) => v !== i))
 const rainx = 5, rainy = 20, rainw = 422, rainh = 17 // rainbar position/size
 let swm = [] // list of swimmers
-let n = 1 // number of iterations (permutations) drawn so far (skip identity)
+let n = 0 // number of derangements drawn so far
 let dline = '' // text line with the distance
 let xyline = '' // x and y distances
 let crushline = '' // text line with crush relationships
@@ -263,8 +266,7 @@ function draw() {
     if (d > 1) allquiesced = false
   }
   if (allquiesced) {
-    n += 1
-    if (n > totperms) {
+    if (n >= derangements.length) {
       // Clear the mini graph area
       const corner = bestCorner(genswimmers(ns))
       noStroke(); fill(0, 0, 0)
@@ -272,8 +274,8 @@ function draw() {
       noLoop()
       return
     }
-    //ci = range(swm.length)
-    ci = nthperm(ns, n*1/*7*/-1)
+    ci = derangements[n]
+    n += 1
     console.log(ci)
     swm = genswimmers(ns)
     for (let i = 0; i < swm.length; i++) {
@@ -310,7 +312,7 @@ function draw() {
   //infoup()
   //noStroke() // Restore no stroke for swimmers
   drawMiniGraph()
-  rainfill(n / totperms)
+  rainfill(n / derangements.length)
 }
 
 function setup() {
