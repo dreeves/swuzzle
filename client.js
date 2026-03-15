@@ -22,6 +22,7 @@ HTMLCanvasElement.prototype.getContext = function(type, attrs = {}) {
 // -----------------------------------------------------------------------------
 
 const ns = 5 // number of swimmers
+const pausems = 1500 // milliseconds to pause between derangements
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
 const nfact = range(ns).reduce((a, b) => a * (b+1), 1) // ns factorial
 // Derangements: permutations with no fixed points (every swimmer chases someone else)
@@ -294,7 +295,7 @@ function draw() {
         noLoop()
         return
       }
-      pauseframes = 30 // ~500ms pause showing coalesced swimmers
+      pauseframes = Math.round(pausems / 1000 * 60)
     }
   }
 
@@ -331,8 +332,12 @@ function draw() {
     fill(1, 0, 1) // bright white head
     ellipse(swm[g[0]][0], swm[g[0]][1], r * 2)
     fill(0, 0, 0) // black numbers
-    const label = g.join(',')
-    textSize(max(6, min(10, r * 1.4 / label.length * 2)))
+    const half = Math.ceil(g.length / 2)
+    const label = g.length >= 4
+      ? g.slice(0, half).join(',') + '\n' + g.slice(half).join(',')
+      : g.join(',')
+    const lineLen = g.length >= 4 ? half * 2 - 1 : label.length
+    textSize(max(6, min(10, r * 1.4 / lineLen * 2)))
     text(label, swm[g[0]][0], swm[g[0]][1])
   }
   textAlign(LEFT, BASELINE)
