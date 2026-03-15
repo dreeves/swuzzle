@@ -194,12 +194,13 @@ function drawArrow(a, b, arrowSize = 6) {
   strokeWeight(1) // Reset stroke weight
 }
 
-// Pick the corner farthest from all swimmer starting positions
-// (excluding top-left where the title and rainbow bar live)
+// Pick the corner farthest from all swimmer starting positions,
+// avoiding the title/rainbow bar area at the top left
 function bestCorner(positions) {
   const gs = 140 // graph area size
+  const top = rainy + rainh + gs/2 // below the rainbow bar
   const corners = [
-    [width - gs/2,  gs/2],          // top-right
+    [width - gs/2,  top],           // top-right (below title)
     [gs/2,          height - gs/2], // bottom-left
     [width - gs/2,  height - gs/2], // bottom-right
   ]
