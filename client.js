@@ -312,12 +312,14 @@ function draw() {
   // Group swimmers by proximity (within 2px = converged)
   const groups = []
   for (let i = 0; i < swm.length; i++) {
-    const g = groups.find(g => pdist(swm[i], swm[g[0]]) < 2)
+    const g = groups.find(g => g.some(j => pdist(swm[i], swm[j]) < 2))
     if (g) g.push(i); else groups.push([i])
   }
   // Save all patches first (before any heads are drawn)
+  // maxpad covers the largest possible circle (all ns swimmers converged)
   patches = []
-  const maxpad = headr * Math.ceil(sqrt(ns)) + 2
+  const maxr = headr * sqrt(ns)
+  const maxpad = maxr + 2
   const maxs = maxpad * 2 * pd
   for (const g of groups) {
     const x = Math.round(swm[g[0]][0]) - maxpad
@@ -325,20 +327,21 @@ function draw() {
     patches.push({ data: ctx.getImageData(x * pd, y * pd, maxs, maxs), x, y })
   }
   // Then draw all heads (area proportional to group size)
+  // Numbers arranged in a mini circle inside the head
   noStroke()
   textAlign(CENTER, CENTER)
+  textSize(9)
   for (const g of groups) {
     const r = headr * sqrt(g.length)
+    const cx = swm[g[0]][0], cy = swm[g[0]][1]
     fill(1, 0, 1) // bright white head
-    ellipse(swm[g[0]][0], swm[g[0]][1], r * 2)
+    ellipse(cx, cy, r * 2)
     fill(0, 0, 0) // black numbers
-    const half = Math.ceil(g.length / 2)
-    const label = g.length >= 4
-      ? g.slice(0, half).join(',') + '\n' + g.slice(half).join(',')
-      : g.join(',')
-    const lineLen = g.length >= 4 ? half * 2 - 1 : label.length
-    textSize(max(6, min(10, r * 1.4 / lineLen * 2)))
-    text(label, swm[g[0]][0], swm[g[0]][1])
+    const off = g.length === 1 ? 0 : r * 0.45
+    for (let j = 0; j < g.length; j++) {
+      const a = j / g.length * TAU + TAU/8 // TAU/8 makes pairs kitty-corner
+      text(g[j], cx + off * cos(a), cy - off * sin(a))
+    }
   }
   textAlign(LEFT, BASELINE)
   //swm.map(p => { ellipse(p[0], p[1], 1) })
