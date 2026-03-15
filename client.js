@@ -37,6 +37,7 @@ let ci = [] // indexes of crushes
 let di = [] // initial distances from crushes
 let si = [] // state of each swimmer (hot or cold)
 let patches = [] // saved pixel patches under swimmer heads
+let pauseframes = 0 // countdown for pause between derangements
 const headr = 6 // radius of the swimmer head dot
 
 // -----------------------------------------------------------------------------
@@ -253,34 +254,47 @@ function drawMiniGraph() {
 // -----------------------------------------------------------------------------
 
 function draw() {
-  // Restore pixels under old heads (putImageData = direct pixel copy, no alpha)
   const ctx = drawingContext
   const pd = pixelDensity()
-  for (let i = 0; i < patches.length; i++) {
-    ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
-  }
 
-  let allquiesced = true
-  for (let i = 0; i < swm.length; i++) {
-    swm[i] = pairstep(swm[i], swm[ci[i]], 1)
-    const d = pdist(swm[i], swm[ci[i]])
-    if (d > 1) allquiesced = false
-  }
-  if (allquiesced) {
-    if (n >= derangements.length) {
-      // Clear the mini graph area
-      const corner = bestCorner(genswimmers(ns))
-      noStroke(); fill(0, 0, 0)
-      rect(corner[0] - 80, corner[1] - 80, 160, 160)
-      noLoop()
-      return
+  // During pause, keep heads visible at coalesced positions
+  if (pauseframes > 0) {
+    pauseframes -= 1
+    if (pauseframes > 0) return
+    // Pause just ended — restore old heads, start next derangement
+    for (let i = 0; i < patches.length; i++) {
+      ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
     }
+    patches = []
     ci = derangements[n]
     n += 1
     console.log(ci)
     swm = genswimmers(ns)
     for (let i = 0; i < swm.length; i++) {
       di[i] = pdist(swm[i], swm[ci[i]])
+    }
+  } else {
+    // Restore pixels under old heads (putImageData = direct pixel copy, no alpha)
+    for (let i = 0; i < patches.length; i++) {
+      ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
+    }
+
+    let allquiesced = true
+    for (let i = 0; i < swm.length; i++) {
+      swm[i] = pairstep(swm[i], swm[ci[i]], 1)
+      const d = pdist(swm[i], swm[ci[i]])
+      if (d > 1) allquiesced = false
+    }
+    if (allquiesced) {
+      if (n >= derangements.length) {
+        // Clear the mini graph area
+        const corner = bestCorner(genswimmers(ns))
+        noStroke(); fill(0, 0, 0)
+        rect(corner[0] - 80, corner[1] - 80, 160, 160)
+        noLoop()
+        return
+      }
+      pauseframes = 30 // ~500ms pause showing coalesced swimmers
     }
   }
 
@@ -294,24 +308,32 @@ function draw() {
     fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
     ellipse(swm[i][0], swm[i][1], 2)
   }
+  // Group swimmers by proximity (within 2px = converged)
+  const groups = []
+  for (let i = 0; i < swm.length; i++) {
+    const g = groups.find(g => pdist(swm[i], swm[g[0]]) < 2)
+    if (g) g.push(i); else groups.push([i])
+  }
   // Save all patches first (before any heads are drawn)
   patches = []
-  const pad = headr + 2 // headr plus anti-aliasing fringe
-  const s = pad * 2 * pd
-  for (let i = 0; i < swm.length; i++) {
-    const x = Math.round(swm[i][0]) - pad
-    const y = Math.round(swm[i][1]) - pad
-    patches.push({ data: ctx.getImageData(x * pd, y * pd, s, s), x: x, y: y })
+  const maxpad = headr * Math.ceil(sqrt(ns)) + 2
+  const maxs = maxpad * 2 * pd
+  for (const g of groups) {
+    const x = Math.round(swm[g[0]][0]) - maxpad
+    const y = Math.round(swm[g[0]][1]) - maxpad
+    patches.push({ data: ctx.getImageData(x * pd, y * pd, maxs, maxs), x, y })
   }
-  // Then draw all heads
+  // Then draw all heads (area proportional to group size)
   noStroke()
-  for (let i = 0; i < swm.length; i++) {
+  textAlign(CENTER, CENTER)
+  for (const g of groups) {
+    const r = headr * sqrt(g.length)
     fill(1, 0, 1) // bright white head
-    ellipse(swm[i][0], swm[i][1], headr * 2)
-    fill(0, 0, 0) // black number
-    textAlign(CENTER, CENTER)
-    textSize(10)
-    text(i, swm[i][0], swm[i][1])
+    ellipse(swm[g[0]][0], swm[g[0]][1], r * 2)
+    fill(0, 0, 0) // black numbers
+    const label = g.join(',')
+    textSize(max(6, min(10, r * 1.4 / label.length * 2)))
+    text(label, swm[g[0]][0], swm[g[0]][1])
   }
   textAlign(LEFT, BASELINE)
   //swm.map(p => { ellipse(p[0], p[1], 1) })
