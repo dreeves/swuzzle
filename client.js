@@ -1,11 +1,11 @@
 /* global [list all the symbols we use here so Glitch doesn't complain!]
 stroke, fill, textSize, width, height, push, pop, text, keyCode, noStroke,
-createCanvas, windowWidth, windowHeight, textWidth, 
-min, max, sin, cos, sqrt, TAU, dist, 
-range, blink, colorMode, HSB, clear, background, 
-line, rect, point, ellipse, 
-midpoint, shuffle, frameRate, randreal, 
-nextperm, nthperm, 
+createCanvas, windowWidth, windowHeight, textWidth,
+min, max, sin, cos, sqrt, TAU, dist,
+range, blink, colorMode, HSB, clear, background,
+line, rect, point, ellipse, drawingContext, pixelDensity,
+midpoint, shuffle, frameRate, randreal,
+nextperm, nthperm,
 */
 
 //new p5() // including this lets you use p5's globals everywhere (not needed now)
@@ -25,6 +25,8 @@ let crushline = '' // text line with crush relationships
 let ci = [] // indexes of crushes
 let di = [] // initial distances from crushes
 let si = [] // state of each swimmer (hot or cold)
+let patches = [] // saved pixel patches under swimmer heads
+const headr = 6 // radius of the swimmer head dot
 
 // -----------------------------------------------------------------------------
 // Displaying things on the screen besides the actual swimmers
@@ -233,9 +235,31 @@ function draw() {
   //const s2 = [midpoint(swm[0], swm[1], step/d), [swm[1][0], swm[1][1] - step]]
   //line(swm[0][0], swm[0][1], s2[1][0], s2[1][1])
   //swm = s2
+  // Restore pixels under old heads (putImageData = direct pixel copy, no alpha)
+  const ctx = drawingContext
+  const pd = pixelDensity()
+  for (let i = 0; i < patches.length; i++) {
+    ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
+  }
+  // Draw trail dots
   for (let i = 0; i < swm.length; i++) {
     fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
     ellipse(swm[i][0], swm[i][1], 2)
+  }
+  // Save all patches first (before any heads are drawn)
+  patches = []
+  const pad = headr + 2 // headr plus anti-aliasing fringe
+  const s = pad * 2 * pd
+  for (let i = 0; i < swm.length; i++) {
+    const x = Math.round(swm[i][0]) - pad
+    const y = Math.round(swm[i][1]) - pad
+    patches.push({ data: ctx.getImageData(x * pd, y * pd, s, s), x: x, y: y })
+  }
+  // Then draw all heads
+  fill(1, 0, 1) // bright white head
+  noStroke()
+  for (let i = 0; i < swm.length; i++) {
+    ellipse(swm[i][0], swm[i][1], headr * 2)
   }
   //swm.map(p => { ellipse(p[0], p[1], 1) })
   //infoup()
