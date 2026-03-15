@@ -1,6 +1,6 @@
 /* global [list all the symbols we use here so Glitch doesn't complain!]
 stroke, fill, textSize, width, height, push, pop, text, keyCode, noStroke,
-createCanvas, windowWidth, windowHeight, textWidth,
+createCanvas, windowWidth, windowHeight, textWidth, noFill,
 min, max, sin, cos, sqrt, TAU, dist,
 range, blink, colorMode, HSB, clear, background,
 line, rect, point, ellipse, drawingContext, pixelDensity, noLoop,
@@ -23,8 +23,8 @@ HTMLCanvasElement.prototype.getContext = function(type, attrs = {}) {
 
 const ns = 5 // number of swimmers
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
-const pbarh = 4 // progress bar height
 const totperms = range(ns).reduce((a, b) => a * (b+1), 1) // ns factorial
+const rainx = 5, rainy = 20, rainw = 422, rainh = 17 // rainbar position/size
 let swm = [] // list of swimmers
 let n = 1 // number of iterations (permutations) drawn so far (skip identity)
 let dline = '' // text line with the distance
@@ -50,10 +50,18 @@ ${" ".repeat(35)}   (${width}x${height} pixels)`
 }
 
 function rainbar() {
+  stroke(0, 0, 0.3) // dim gray outline
+  noFill()
+  rect(rainx, rainy, rainw, rainh)
+}
+
+// Fill the rainbow bar proportionally to progress (0 to 1)
+function rainfill(frac) {
   noStroke()
-  for (let i = 0; i <= 422; i++) {            // rainbow bar from x=5 to x=422+5
-    fill(blink(i/422), 1, 1)
-    rect(5+i, 20, 1, 17)
+  const w = Math.round(rainw * frac)
+  for (let i = 0; i <= w; i++) {
+    fill(blink(i/rainw), 1, 1)
+    rect(rainx+i, rainy, 1, rainh)
   }
 }
 
@@ -106,10 +114,9 @@ function infoup() {
 // the canvas and the edges at -1 to +1 and convert to where the upper left 
 // corner is (0,0) and the bottom right is (n-1,n-1)
 function coort(x, y) {
-  const h = height - pbarh
-  const n = min(width, h)
-  const dx = max(0, width - h)
-  const dy = max(0, h - width - (2*infoh+5))
+  const n = min(width, height)
+  const dx = max(0, width - height)
+  const dy = max(0, height - width - (2*infoh+5))
   return [n/2 * (1+x) + dx,
           n/2 * (1-y) + dy]
 }
@@ -184,17 +191,34 @@ function drawArrow(a, b, arrowSize = 6) {
   strokeWeight(1) // Reset stroke weight
 }
 
+// Pick the corner farthest from all swimmer starting positions
+// (excluding top-left where the title and rainbow bar live)
+function bestCorner(positions) {
+  const gs = 140 // graph area size
+  const corners = [
+    [width - gs/2,  gs/2],          // top-right
+    [gs/2,          height - gs/2], // bottom-left
+    [width - gs/2,  height - gs/2], // bottom-right
+  ]
+  return argmin(corners, c =>
+    -Math.min(...positions.map(p => pdist(p, c)))
+  )
+}
+
 // Draw mini graph in corner
 function drawMiniGraph() {
   const graphSize = 120
-  const centerX = width - graphSize/2 - 20
-  const centerY = graphSize/2 + 10  // Moved up from +50 to +10
+  const corner = bestCorner(genswimmers(ns))
+  const centerX = corner[0]
+  const centerY = corner[1]
   const radius = 40
-  
+  const gx = centerX - graphSize/2 - 10
+  const gy = centerY - graphSize/2 - 10
+
   // Background
   noStroke()
   fill(0, 0, 0, 0.7)
-  rect(width - graphSize - 30, 0, graphSize + 20, graphSize + 20)  // Moved up from y=40 to y=0
+  rect(gx, gy, graphSize + 20, graphSize + 20)
   
   const miniPos = genMiniSwimmers(ns, centerX, centerY, radius)
   
@@ -242,8 +266,9 @@ function draw() {
     n += 1
     if (n > totperms) {
       // Clear the mini graph area
+      const corner = bestCorner(genswimmers(ns))
       noStroke(); fill(0, 0, 0)
-      rect(width - 150, 0, 150, 140)
+      rect(corner[0] - 80, corner[1] - 80, 160, 160)
       noLoop()
       return
     }
@@ -285,10 +310,7 @@ function draw() {
   //infoup()
   //noStroke() // Restore no stroke for swimmers
   drawMiniGraph()
-  // Progress bar: thin strip across the bottom
-  noStroke()
-  fill(1, 0, 0.4)                          // muted white
-  rect(0, height - 4, width * n / totperms, 4)
+  rainfill(n / totperms)
 }
 
 function setup() {
