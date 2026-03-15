@@ -303,11 +303,16 @@ function draw() {
     patches.push({ data: ctx.getImageData(x * pd, y * pd, s, s), x: x, y: y })
   }
   // Then draw all heads
-  fill(1, 0, 1) // bright white head
   noStroke()
   for (let i = 0; i < swm.length; i++) {
+    fill(1, 0, 1) // bright white head
     ellipse(swm[i][0], swm[i][1], headr * 2)
+    fill(0, 0, 0) // black number
+    textAlign(CENTER, CENTER)
+    textSize(10)
+    text(i, swm[i][0], swm[i][1])
   }
+  textAlign(LEFT, BASELINE)
   //swm.map(p => { ellipse(p[0], p[1], 1) })
   //infoup()
   //noStroke() // Restore no stroke for swimmers
