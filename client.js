@@ -3,12 +3,19 @@ stroke, fill, textSize, width, height, push, pop, text, keyCode, noStroke,
 createCanvas, windowWidth, windowHeight, textWidth,
 min, max, sin, cos, sqrt, TAU, dist,
 range, blink, colorMode, HSB, clear, background,
-line, rect, point, ellipse, drawingContext, pixelDensity,
+line, rect, point, ellipse, drawingContext, pixelDensity, noLoop,
 midpoint, shuffle, frameRate, randreal,
 nextperm, nthperm,
 */
 
 //new p5() // including this lets you use p5's globals everywhere (not needed now)
+
+// Ensure canvas 2d contexts are optimized for frequent getImageData calls
+const _origGetContext = HTMLCanvasElement.prototype.getContext
+HTMLCanvasElement.prototype.getContext = function(type, attrs = {}) {
+  if (type === '2d') attrs.willReadFrequently = true
+  return _origGetContext.call(this, type, attrs)
+}
 
 // -----------------------------------------------------------------------------
 // Constants, Parameters, and Global Variables
@@ -16,9 +23,10 @@ nextperm, nthperm,
 
 const ns = 5 // number of swimmers
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
+const pbarh = 4 // progress bar height
 const totperms = range(ns).reduce((a, b) => a * (b+1), 1) // ns factorial
 let swm = [] // list of swimmers
-let n = 0 // number of iterations (permutations) drawn so far
+let n = 1 // number of iterations (permutations) drawn so far (skip identity)
 let dline = '' // text line with the distance
 let xyline = '' // x and y distances
 let crushline = '' // text line with crush relationships
@@ -98,10 +106,11 @@ function infoup() {
 // the canvas and the edges at -1 to +1 and convert to where the upper left 
 // corner is (0,0) and the bottom right is (n-1,n-1)
 function coort(x, y) {
-  const n = min(width, height)
-  const dx = max(0, width - height)
-  const dy = max(0, height - width - (2*infoh+5))
-  return [n/2 * (1+x) + dx, 
+  const h = height - pbarh
+  const n = min(width, h)
+  const dx = max(0, width - h)
+  const dy = max(0, h - width - (2*infoh+5))
+  return [n/2 * (1+x) + dx,
           n/2 * (1-y) + dy]
 }
 
@@ -137,12 +146,15 @@ function pairstep(p1, p2, step) {
 }
 
 // Generate mini swimmer positions for corner graph (HT Codebuff)
+// Mirrors genswimmers layout: coort maps (x,y) -> (scale*(1+x), scale*(1-y))
 function genMiniSwimmers(n, centerX, centerY, radius) {
+  const mc = (x, y) => [centerX + radius*x, centerY - radius*y] // mini coort
+  const mp = (theta) => mc(cos(theta), sin(theta))              // mini polar
   let a = []
-  if      (n===3)  a = [[centerX-radius*0.5, centerY-radius*0.3], [centerX+radius*0.5, centerY-radius*0.3], [centerX, centerY+radius*0.6]]
-  else if (n===4)  a = [[centerX+radius*0.7, centerY-radius*0.7], [centerX-radius*0.7, centerY-radius*0.7], [centerX-radius*0.7, centerY+radius*0.7], [centerX+radius*0.7, centerY+radius*0.7]]
-  else if (n%2==0) a = range(n).map(i => [centerX + radius * cos(i*TAU/n), centerY - radius * sin(i*TAU/n)])
-  else             a = range(n).map(i => [centerX + radius * cos(i/n*TAU + (1/4-1/n)*TAU), centerY - radius * sin(i/n*TAU + (1/4-1/n)*TAU)])
+  if      (n===3)  a = [mc(-1,-1), mc(1,-1), mc(0, sqrt(3)-1)]
+  else if (n===4)  a = [mc(1,1), mc(-1,1), mc(-1,-1), mc(1,-1)]
+  else if (n%2==0) a = range(n).map(i => mp(i*TAU/n))
+  else             a = range(n).map(i => mp(i/n*TAU + (1/4-1/n)*TAU))
   return a
 }
 
@@ -213,6 +225,13 @@ function drawMiniGraph() {
 // -----------------------------------------------------------------------------
 
 function draw() {
+  // Restore pixels under old heads (putImageData = direct pixel copy, no alpha)
+  const ctx = drawingContext
+  const pd = pixelDensity()
+  for (let i = 0; i < patches.length; i++) {
+    ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
+  }
+
   let allquiesced = true
   for (let i = 0; i < swm.length; i++) {
     swm[i] = pairstep(swm[i], swm[ci[i]], 1)
@@ -220,7 +239,14 @@ function draw() {
     if (d > 1) allquiesced = false
   }
   if (allquiesced) {
-    n += 1 
+    n += 1
+    if (n > totperms) {
+      // Clear the mini graph area
+      noStroke(); fill(0, 0, 0)
+      rect(width - 150, 0, 150, 140)
+      noLoop()
+      return
+    }
     //ci = range(swm.length)
     ci = nthperm(ns, n*1/*7*/-1)
     console.log(ci)
@@ -229,18 +255,12 @@ function draw() {
       di[i] = pdist(swm[i], swm[ci[i]])
     }
   }
-  
+
   //const d = sdist()
   //const step = .25
   //const s2 = [midpoint(swm[0], swm[1], step/d), [swm[1][0], swm[1][1] - step]]
   //line(swm[0][0], swm[0][1], s2[1][0], s2[1][1])
   //swm = s2
-  // Restore pixels under old heads (putImageData = direct pixel copy, no alpha)
-  const ctx = drawingContext
-  const pd = pixelDensity()
-  for (let i = 0; i < patches.length; i++) {
-    ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
-  }
   // Draw trail dots
   for (let i = 0; i < swm.length; i++) {
     fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
