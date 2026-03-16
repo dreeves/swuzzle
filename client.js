@@ -52,6 +52,8 @@ let si = [] // state of each swimmer (hot or cold)
 let patches = [] // saved pixel patches under swimmer heads
 let pauseframes = 0 // countdown for pause between derangements
 const headr = 6 // radius of the swimmer head dot
+const simstep = 1
+const simsubsteps = 2
 const coalescepx = 3
 
 // -----------------------------------------------------------------------------
@@ -268,6 +270,13 @@ function drawMiniGraph() {
   textAlign(LEFT, BASELINE)
 }
 
+function traildots() {
+  for (let i = 0; i < swm.length; i++) {
+    fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
+    ellipse(swm[i][0], swm[i][1], 2)
+  }
+}
+
 function styleButton(button) {
   button.style('background-color', '#333')
   button.style('color', 'white')
@@ -297,6 +306,20 @@ function loadCrushMap() {
   for (let i = 0; i < swm.length; i++) {
     di[i] = pdist(swm[i], swm[ci[i]])
   }
+}
+
+function syncstep(points, crushes, step) {
+  return points.map((p, i) => pairstep(p, points[crushes[i]], step))
+}
+
+function advanceswimmers() {
+  let allquiesced = false
+  for (let i = 0; i < simsubsteps; i++) {
+    swm = syncstep(swm, ci, simstep)
+    traildots()
+    allquiesced = swm.every((p, j) => pdist(p, swm[ci[j]]) <= simstep)
+  }
+  return allquiesced
 }
 
 // -----------------------------------------------------------------------------
@@ -333,13 +356,7 @@ function draw() {
       ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
     }
 
-    let allquiesced = true
-    for (let i = 0; i < swm.length; i++) {
-      swm[i] = pairstep(swm[i], swm[ci[i]], 1)
-      const d = pdist(swm[i], swm[ci[i]])
-      if (d > 1) allquiesced = false
-    }
-    if (allquiesced) {
+    if (advanceswimmers()) {
       pauseframes = Math.round(pausems / 1000 * 60)
     }
   }
@@ -350,10 +367,6 @@ function draw() {
   //line(swm[0][0], swm[0][1], s2[1][0], s2[1][1])
   //swm = s2
   // Draw trail dots
-  for (let i = 0; i < swm.length; i++) {
-    fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
-    ellipse(swm[i][0], swm[i][1], 2)
-  }
   // Group swimmers by proximity (within 2px = converged)
   // Treat swimmers closer than coalescepx as visually coalesced.
   const groups = []
