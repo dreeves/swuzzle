@@ -86,7 +86,7 @@ function instructions(g = screen()) {
   const countline = allcrush ?
     `${ns} swimmers, ${ncrush} crush maps` :
     `${ns} swimmers, ${ncrush} derangements`
-  g.text('Amorous Swimmers v1929', 5, 15)
+  g.text('Amorous Swimmers v1930', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
@@ -106,6 +106,8 @@ function rainbar(g = screen()) {
   g.noFill()
   g.rect(rainx, rainy, rainwid(), rainh)
 }
+
+function progfrac() { return min(n + 1, ncrush) / ncrush }
 
 // Fill the rainbow bar proportionally to progress (0 to 1)
 function rainfill(frac, g = screen()) {
@@ -492,7 +494,7 @@ function draw() {
   updatehits()
   agefx()
   drawoverlay(groups)
-  rainfill(n / ncrush, trail)
+  rainfill(progfrac(), trail)
   composite()
   drawfx()
 }
@@ -528,6 +530,7 @@ function setup() {
   
   instructions(trail)
   rainbar(trail)  
+  rainfill(progfrac(), trail)
   drawoverlay(swmgroups())
   composite()
 
