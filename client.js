@@ -374,7 +374,6 @@ function spawnhit(i) {
 
 function bloop(hits) {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-  if (audioCtx.state === 'suspended') audioCtx.resume()
 
   const t = audioCtx.currentTime
   const f = bloopf0 * 2 ** (-(hits-1)/18)
