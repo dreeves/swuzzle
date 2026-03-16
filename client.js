@@ -21,13 +21,25 @@ HTMLCanvasElement.prototype.getContext = function(type, attrs = {}) {
 // Constants, Parameters, and Global Variables
 // -----------------------------------------------------------------------------
 
-const ns = 5 // number of swimmers
+const nsmin = 2
+const nsmax = 9
+const rawns = getQueryParam('ns', `${nsmin}`)
+const ns = Number(rawns)
+const rawall = getQueryParam('all', '0')
+if (!/^\d+$/.test(rawns) || ns < nsmin || ns > nsmax)
+  throw new Error(`Expected ns query parameter to be an integer from ${nsmin} to ${nsmax}; got ${rawns}`)
+if (rawall !== '0' && rawall !== '1')
+  throw new Error(`Expected all query parameter to be 0 or 1; got ${rawall}`)
+const allcrush = rawall === '1'
+window.history.replaceState({}, null, swuzurl(ns, allcrush))
+
 const pausems = 1500 // milliseconds to pause between derangements
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
-const nfact = range(ns).reduce((a, b) => a * (b+1), 1) // ns factorial
 // Derangements: permutations with no fixed points (every swimmer chases someone else)
-const derangements = range(nfact).map(i => nthperm(ns, i))
-                                 .filter(p => p.every((v, i) => v !== i))
+// Crush map: each swimmer chooses a different swimmer to chase; multiple
+// swimmers may share a crush.
+const derangements = allDerangements(ns)
+const ncrush = allcrush ? crushCount(ns) : derangements.length
 const rainx = 5, rainy = 20, rainw = 422, rainh = 17 // rainbar position/size
 let swm = [] // list of swimmers
 let n = 0 // number of derangements drawn so far
@@ -40,6 +52,7 @@ let si = [] // state of each swimmer (hot or cold)
 let patches = [] // saved pixel patches under swimmer heads
 let pauseframes = 0 // countdown for pause between derangements
 const headr = 6 // radius of the swimmer head dot
+const coalescepx = 3
 
 // -----------------------------------------------------------------------------
 // Displaying things on the screen besides the actual swimmers
@@ -48,11 +61,16 @@ const headr = 6 // radius of the swimmer head dot
 function instructions() {
   stroke('Black'); fill('White')
   textSize(15)
-  const thecopy = `Amorous Swimmers
-
-${" ".repeat(35)}   (${width}x${height} pixels)`
-  text(thecopy, 5, 15)
+  const pixline = `(${width}x${height} pixels)`
+  const countline = allcrush ?
+    `${ns} swimmers, ${ncrush} crush maps` :
+    `${ns} swimmers, ${ncrush} derangements`
+  text('Amorous Swimmers', 5, 15)
+  text(countline, 5, rainy + rainh + 15)
+  text(pixline, rainx + rainw - textWidth(pixline), rainy + rainh + 15)
 }
+
+function swuzurl(n, all) { return `?ns=${n}&all=${all ? 1 : 0}` }
 
 function rainbar() {
   stroke(0, 0, 0.3) // dim gray outline
@@ -250,6 +268,37 @@ function drawMiniGraph() {
   textAlign(LEFT, BASELINE)
 }
 
+function styleButton(button) {
+  button.style('background-color', '#333')
+  button.style('color', 'white')
+  button.style('padding', '10px')
+  button.style('border', 'none')
+  button.style('border-radius', '5px')
+  button.style('font-size', '18px')
+  button.style('cursor', 'pointer')
+  button.style('box-shadow', '0 2px 4px rgba(0, 0, 0, 0.5)')
+}
+
+function setButtonState(button, enabled) {
+  if (enabled) {
+    button.style('background-color', '#333')
+    button.style('color', 'white')
+    button.removeAttribute('disabled')
+  } else {
+    button.style('background-color', '#666')
+    button.style('color', '#222')
+    button.attribute('disabled', '')
+  }
+}
+
+function loadCrushMap() {
+  ci = allcrush ? nthCrush(ns, n) : derangements[n]
+  swm = genswimmers(ns)
+  for (let i = 0; i < swm.length; i++) {
+    di[i] = pdist(swm[i], swm[ci[i]])
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Special p5.js functions -----------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -267,13 +316,17 @@ function draw() {
       ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
     }
     patches = []
-    ci = derangements[n]
     n += 1
-    console.log(ci)
-    swm = genswimmers(ns)
-    for (let i = 0; i < swm.length; i++) {
-      di[i] = pdist(swm[i], swm[ci[i]])
+    if (n >= ncrush) {
+      // Clear the mini graph area
+      const corner = bestCorner(genswimmers(ns))
+      noStroke(); fill(0, 0, 0)
+      rect(corner[0] - 80, corner[1] - 80, 160, 160)
+      noLoop()
+      return
     }
+    loadCrushMap()
+    console.log(ci)
   } else {
     // Restore pixels under old heads (putImageData = direct pixel copy, no alpha)
     for (let i = 0; i < patches.length; i++) {
@@ -287,14 +340,6 @@ function draw() {
       if (d > 1) allquiesced = false
     }
     if (allquiesced) {
-      if (n >= derangements.length) {
-        // Clear the mini graph area
-        const corner = bestCorner(genswimmers(ns))
-        noStroke(); fill(0, 0, 0)
-        rect(corner[0] - 80, corner[1] - 80, 160, 160)
-        noLoop()
-        return
-      }
       pauseframes = Math.round(pausems / 1000 * 60)
     }
   }
@@ -310,9 +355,10 @@ function draw() {
     ellipse(swm[i][0], swm[i][1], 2)
   }
   // Group swimmers by proximity (within 2px = converged)
+  // Treat swimmers closer than coalescepx as visually coalesced.
   const groups = []
   for (let i = 0; i < swm.length; i++) {
-    const g = groups.find(g => g.some(j => pdist(swm[i], swm[j]) < 2))
+    const g = groups.find(g => g.some(j => pdist(swm[i], swm[j]) < coalescepx))
     if (g) g.push(i); else groups.push([i])
   }
   // Save all patches first (before any heads are drawn)
@@ -348,7 +394,7 @@ function draw() {
   //infoup()
   //noStroke() // Restore no stroke for swimmers
   drawMiniGraph()
-  rainfill(n / derangements.length)
+  rainfill(n / ncrush)
 }
 
 function setup() {
@@ -364,22 +410,37 @@ function setup() {
   //const y = -.95
   //swm = [coort(-.5, y), coort(.5, y)]
   //initd = dist(swm[0][0], swm[0][1], swm[1][0], swm[1][1])
-  swm = genswimmers(ns)
-  ci = range(swm.length)
+  loadCrushMap()
   //ci = range(swm.length).map(x => (x+1)%swm.length) // tmp
   si = range(swm.length).map(x => 1)
-  for (let i = 0; i < swm.length; i++) {
-    di[i] = pdist(swm[i], swm[ci[i]])
-  }
   //swm.map(p => { ellipse(p[0], p[1], 8) })
   
   instructions()
   rainbar()  
+
+  const crushBox = createCheckbox('all crush maps', allcrush)
+  crushBox.position(2, 86)
+  crushBox.style('color', 'white')
+  crushBox.style('font-size', '14px')
+  crushBox.style('user-select', 'none')
+  crushBox.style('accent-color', '#333')
+  crushBox.changed(() => rage(swuzurl(ns, crushBox.checked())))
+  
+  const backButton = createButton('◀️')
+  backButton.position(318, 84)
+  styleButton(backButton)
+  setButtonState(backButton, ns > nsmin)
+  backButton.mousePressed(() => rage(swuzurl(ns-1, allcrush)))
+
+  const fwdButton = createButton('▶️')
+  fwdButton.position(365, 84)
+  styleButton(fwdButton)
+  setButtonState(fwdButton, ns < nsmax)
+  fwdButton.mousePressed(() => rage(swuzurl(ns+1, allcrush)))
+
   //stroke('white')
 }
 
 // -----------------------------------------------------------------------------
 // Bad ideas go below
 // -----------------------------------------------------------------------------
-
-

@@ -101,6 +101,34 @@ function range(n) {
   //return Array(n).fill(0).map((x,i)=>i) // old way #SCHDEL
 }
 
+function factorial(n) {
+  return range(n).reduce((a, b) => a * (b+1), 1)
+}
+
+function allDerangements(n) {
+  return range(factorial(n)).map(i => nthperm(n, i))
+                            .filter(p => p.every((v, i) => v !== i))
+}
+
+function crushCount(n) {
+  if (!Number.isInteger(n) || n < 2)
+    throw new Error(`Expected n to be an integer >= 2; got ${n}`)
+  return (n-1) ** n
+}
+
+function nthCrush(n, rank) {
+  const count = crushCount(n)
+  if (!Number.isInteger(rank) || rank < 0 || rank >= count)
+    throw new Error(`Expected rank to be an integer from 0 to ${count-1}; got ${rank}`)
+  const crush = []
+  for (let i = 0; i < n; i++) {
+    const choice = rank % (n-1)
+    rank = Math.floor(rank / (n-1))
+    crush[i] = choice >= i ? choice + 1 : choice
+  }
+  return crush
+}
+
 // Return the point halfway (or x of the way) betw points a & b in the 2-D plane
 function midpoint(a, b, x=0.5) {
   return [((1-x) * a[0] + x * b[0]), 
