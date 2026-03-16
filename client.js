@@ -48,16 +48,21 @@ let si = [] // state of each swimmer (hot or cold)
 let pauseframes = 0 // countdown for pause between derangements
 const headr = 6 // radius of the swimmer head dot
 const edgepad = headr + 6
-const simstep = 1
-const simsubsteps = 2
-const simtol = 1e-9
+const simstep = 0.2
+const simsubsteps = 10
 const coalescepx = 3
+const heartframes = 36
+const pulseframes = 18
+const hearthue = blink(1)
 const mingraphsz = 120
 const mingraphpad = 10
 const mingraphr = 40
 let baseswm = []
 let graphcorner = []
 let minipos = []
+let pulses = []
+let hearts = []
+let hitseen = new Set()
 let trail
 let mingraph
 let overlay
@@ -69,6 +74,7 @@ let overlay
 function screen() {
   return {
     stroke, fill, textSize, text, textWidth, noFill, rect, noStroke, ellipse,
+    strokeWeight, textAlign,
   }
 }
 
@@ -80,7 +86,7 @@ function instructions(g = screen()) {
   const countline = allcrush ?
     `${ns} swimmers, ${ncrush} crush maps` :
     `${ns} swimmers, ${ncrush} derangements`
-  g.text('Amorous Swimmers', 5, 15)
+  g.text('Amorous Swimmers v1929', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
@@ -94,19 +100,6 @@ function uiright() { return rainx + rainwid() }
 function fwdx() { return max(rainx + buttonsz + buttgap, uiright() - buttonsz) }
 
 function backx() { return fwdx() - buttonsz - buttgap }
-
-function boxat(x, y, s) {
-  return { l: x - s/2, r: x + s/2, t: y - s/2, b: y + s/2 }
-}
-
-function overlap(a, b) {
-  return max(0, min(a.r, b.r) - max(a.l, b.l)) *
-         max(0, min(a.b, b.b) - max(a.t, b.t))
-}
-
-function arrowbox() {
-  return { l: backx(), r: fwdx() + buttonsz, t: buttony, b: buttony + buttonsz }
-}
 
 function rainbar(g = screen()) {
   g.stroke(0, 0, 0.3) // dim gray outline
@@ -255,16 +248,12 @@ function drawArrow(g, a, b, arrowSize = 6) {
 // avoiding the title/rainbow bar area at the top left
 function bestCorner(positions) {
   const gs = mingraphsz + 2*mingraphpad
-  const top = rainy + rainh + gs/2 // below the rainbow bar
   const corners = [
-    [width - gs/2,  top],           // top-right (below title)
     [gs/2,          height - gs/2], // bottom-left
     [width - gs/2,  height - gs/2], // bottom-right
   ]
-  const buttons = arrowbox()
   return argmin(corners, c =>
-    overlap(boxat(c[0], c[1], gs), buttons) * (width + height) -
-    Math.min(...positions.map(p => pdist(p, c)))
+    -Math.min(...positions.map(p => pdist(p, c)))
   )
 }
 
@@ -275,6 +264,15 @@ function drawMiniGraph(g) {
           graphcorner[1] - mingraphsz/2 - mingraphpad)
 }
 
+function swmgroups() {
+  const groups = []
+  for (let i = 0; i < swm.length; i++) {
+    const g = groups.find(g => g.some(j => pdist(swm[i], swm[j]) < coalescepx))
+    if (g) g.push(i); else groups.push([i])
+  }
+  return groups
+}
+
 function traildots(g = screen()) {
   for (let i = 0; i < swm.length; i++) {
     g.fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
@@ -282,22 +280,84 @@ function traildots(g = screen()) {
   }
 }
 
-function drawHeads() {
-  // Group swimmers by proximity (within 2px = converged)
-  // Treat swimmers closer than coalescepx as visually coalesced.
-  const groups = []
-  for (let i = 0; i < swm.length; i++) {
-    const g = groups.find(g => g.some(j => pdist(swm[i], swm[j]) < coalescepx))
-    if (g) g.push(i); else groups.push([i])
+function groupbox(g) {
+  const r = headr * sqrt(g.length)
+  return { cx: swm[g[0]][0], cy: swm[g[0]][1], r }
+}
+
+function spawnhit(i) {
+  const p = midpoint(swm[i], swm[ci[i]])
+  pulses.push({ cx: p[0], cy: p[1], r: headr * 1.35, age: 0, ttl: pulseframes })
+  hearts = hearts.concat(range(2).map(j => {
+    const a = (j + 0.5) / 2 * TAU
+    return {
+      h: hearthue,
+      x: p[0] + headr * 0.25 * cos(a),
+      y: p[1] - headr * 0.15 * sin(a),
+      dx: 0.22 * cos(a),
+      dy: 0.75 + 0.12 * (j % 2),
+      s: 10 + 2 * (j % 2),
+      age: 0,
+      ttl: heartframes + j,
+    }
+  }))
+}
+
+function updatehits() {
+  range(ns)
+    .filter(i => pdist(swm[i], swm[ci[i]]) < coalescepx && !hitseen.has(i))
+    .forEach(i => {
+      spawnhit(i)
+      hitseen.add(i)
+    })
+}
+
+function agefx() {
+  pulses = pulses.map(p => ({ ...p, age: p.age + 1 })).filter(p => p.age < p.ttl)
+  hearts = hearts.map(h => ({
+    ...h,
+    x: h.x + h.dx,
+    y: h.y - h.dy,
+    age: h.age + 1,
+  })).filter(h => h.age < h.ttl)
+}
+
+function drawPulses(g = screen()) {
+  g.noFill()
+  for (const p of pulses) {
+    const t = p.age / p.ttl
+    g.stroke(1, 0, 1, 1 - t)
+    g.strokeWeight(1.5 - t/2)
+    g.ellipse(p.cx, p.cy, p.r * 2 * (0.9 + 0.45 * t))
   }
+  g.strokeWeight(1)
+}
+
+function drawHearts(g = screen()) {
+  g.noStroke()
+  g.textAlign(CENTER, CENTER)
+  for (const h of hearts) {
+    const t = h.age / h.ttl
+    g.fill(h.h, 1, 1, 1 - t)
+    g.textSize(h.s * (1 - t/4))
+    g.text('\u2665', h.x, h.y)
+  }
+  g.textAlign(LEFT, BASELINE)
+}
+
+function drawfx(g = screen()) {
+  drawPulses(g)
+  drawHearts(g)
+}
+
+function drawHeads(groups) {
   // Then draw all heads (area proportional to group size)
   // Numbers arranged in a mini circle inside the head
   overlay.noStroke()
   overlay.textAlign(CENTER, CENTER)
   overlay.textSize(9)
   for (const g of groups) {
-    const r = headr * sqrt(g.length)
-    const cx = swm[g[0]][0], cy = swm[g[0]][1]
+    const { cx, cy, r } = groupbox(g)
     overlay.fill(1, 0, 1) // bright white head
     overlay.ellipse(cx, cy, r * 2)
     overlay.fill(0, 0, 0) // black numbers
@@ -310,9 +370,9 @@ function drawHeads() {
   overlay.textAlign(LEFT, BASELINE)
 }
 
-function drawoverlay() {
+function drawoverlay(groups) {
   overlay.clear()
-  drawHeads()
+  drawHeads(groups)
   drawMiniGraph(overlay)
 }
 
@@ -353,6 +413,7 @@ function loadCrushMap() {
   for (let i = 0; i < swm.length; i++) {
     di[i] = pdist(swm[i], swm[ci[i]])
   }
+  hitseen = new Set()
   cacheMiniGraph()
 }
 
@@ -388,7 +449,7 @@ function advanceswimmers() {
   for (let i = 0; i < simsubsteps; i++) {
     swm = syncstep(swm, ci, simstep)
     traildots(trail)
-    allquiesced = swm.every((p, j) => pdist(p, swm[ci[j]]) <= simstep + simtol)
+    allquiesced = swm.every((p, j) => pdist(p, swm[ci[j]]) < simstep)
   }
   return allquiesced
 }
@@ -401,7 +462,12 @@ function draw() {
   // During pause, keep heads visible at coalesced positions
   if (pauseframes > 0) {
     pauseframes -= 1
-    if (pauseframes > 0) return
+    if (pauseframes > 0) {
+      agefx()
+      composite()
+      drawfx()
+      return
+    }
     n += 1
     if (n >= ncrush) {
       overlay.clear()
@@ -422,9 +488,13 @@ function draw() {
   //const s2 = [midpoint(swm[0], swm[1], step/d), [swm[1][0], swm[1][1] - step]]
   //line(swm[0][0], swm[0][1], s2[1][0], s2[1][1])
   //swm = s2
-  drawoverlay()
+  const groups = swmgroups()
+  updatehits()
+  agefx()
+  drawoverlay(groups)
   rainfill(n / ncrush, trail)
   composite()
+  drawfx()
 }
 
 function setup() {
@@ -458,7 +528,7 @@ function setup() {
   
   instructions(trail)
   rainbar(trail)  
-  drawoverlay()
+  drawoverlay(swmgroups())
   composite()
 
   const crushBox = createCheckbox('all crush maps', allcrush)

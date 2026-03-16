@@ -122,41 +122,58 @@ function loadApp(search, windowWidth, windowHeight) {
   return { buttons, context }
 }
 
-const { buttons, context } = loadApp('?ns=4&all=0', 390, 844)
-const s = JSON.parse(
-  vm.runInContext(
-    'JSON.stringify({ graphcorner, mingraphsz, mingraphpad, buttonsz, width })',
-    context,
-  ),
-)
-const back = buttons.find(b => b.label === '◀️')
-const fwd = buttons.find(b => b.label === '▶️')
-const graph = {
-  l: s.graphcorner[0] - (s.mingraphsz/2 + s.mingraphpad),
-  r: s.graphcorner[0] + (s.mingraphsz/2 + s.mingraphpad),
-  t: s.graphcorner[1] - (s.mingraphsz/2 + s.mingraphpad),
-  b: s.graphcorner[1] + (s.mingraphsz/2 + s.mingraphpad),
-}
-const arrows = {
-  l: back.x,
-  r: fwd.x + s.buttonsz,
-  t: back.y,
-  b: back.y + s.buttonsz,
-}
-const overlap = Math.max(0, Math.min(graph.r, arrows.r) - Math.max(graph.l, arrows.l)) *
-                Math.max(0, Math.min(graph.b, arrows.b) - Math.max(graph.t, arrows.t))
+for (const [w, h] of [[320, 568], [375, 667], [390, 844], [430, 932], [568, 320]]) {
+  const { buttons, context } = loadApp('?ns=4&all=0', w, h)
+  const s = JSON.parse(
+    vm.runInContext(
+      'JSON.stringify({ graphcorner, mingraphsz, mingraphpad, buttonsz, width, buttony, rainy })',
+      context,
+    ),
+  )
+  const back = buttons.find(b => b.label === '◀️')
+  const fwd = buttons.find(b => b.label === '▶️')
+  const graph = {
+    l: s.graphcorner[0] - (s.mingraphsz/2 + s.mingraphpad),
+    r: s.graphcorner[0] + (s.mingraphsz/2 + s.mingraphpad),
+    t: s.graphcorner[1] - (s.mingraphsz/2 + s.mingraphpad),
+    b: s.graphcorner[1] + (s.mingraphsz/2 + s.mingraphpad),
+  }
+  const arrows = {
+    l: back.x,
+    r: fwd.x + s.buttonsz,
+    t: back.y,
+    b: back.y + s.buttonsz,
+  }
+  const controls = {
+    l: 0,
+    r: s.width,
+    t: s.rainy,
+    b: s.buttony + s.buttonsz,
+  }
+  const overlap = Math.max(0, Math.min(graph.r, arrows.r) - Math.max(graph.l, arrows.l)) *
+                  Math.max(0, Math.min(graph.b, arrows.b) - Math.max(graph.t, arrows.t))
+  const cover = Math.max(0, Math.min(graph.r, controls.r) - Math.max(graph.l, controls.l)) *
+                Math.max(0, Math.min(graph.b, controls.b) - Math.max(graph.t, controls.t))
 
-assert.equal(
-  overlap,
-  0,
-  `replicata: load the app with ?ns=4&all=0 on a 390x844 screen and call setup()
+  assert.equal(
+    overlap,
+    0,
+    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and call setup()
 expectata: the corner diagram does not overlap the arrow controls
 resultata: the overlap area is ${overlap}`,
-)
-assert.equal(
-  fwd.x + s.buttonsz <= s.width,
-  true,
-  `replicata: load the app with ?ns=4&all=0 on a 390x844 screen and call setup()
+  )
+  assert.equal(
+    cover,
+    0,
+    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and call setup()
+expectata: the corner diagram stays completely below or away from the whole control row
+resultata: the overlap area with the control row is ${cover}`,
+  )
+  assert.equal(
+    fwd.x + s.buttonsz <= s.width,
+    true,
+    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and call setup()
 expectata: the forward button stays on screen
 resultata: the forward button ends at x=${fwd.x + s.buttonsz} on a ${s.width}px-wide screen`,
-)
+  )
+}

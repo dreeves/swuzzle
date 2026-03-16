@@ -62,7 +62,7 @@ function loadApp(search) {
       putImageData() {},
     },
     pixelDensity() { return 1 },
-    noLoop() {},
+    noLoop() { context.stopped = true },
     midpoint: undefined,
     shuffle(x) { return x },
     frameRate() {},
@@ -107,89 +107,93 @@ function loadApp(search) {
         checked() { return this.checkedValue },
       }
     },
+    stopped: false,
   }
   context.HTMLCanvasElement.prototype = { getContext() { return {} } }
   vm.createContext(context)
   vm.runInContext(utilsrc, context, { filename: 'utils.js' })
   vm.runInContext(clientsrc, context, { filename: 'client.js' })
+  vm.runInContext('setup()', context)
   return context
 }
 
 function state(context) {
   return JSON.parse(
-    vm.runInContext('JSON.stringify({ swm, ci, simstep, simsubsteps })', context),
+    vm.runInContext(
+      'JSON.stringify({ hearts, pulses, pauseframes, hearthue, hitseen: Array.from(hitseen) })',
+      context,
+    ),
   )
 }
 
-function approx(a, b) { return Math.abs(a - b) < 1e-9 }
-
 const context = loadApp('?ns=2&all=0')
+let s = state(context)
 
-const sync = JSON.parse(
-  vm.runInContext(
-    `JSON.stringify(syncstep([[0,0],[10,0],[0,10]], [1,2,0], 1))`,
-    context,
-  ),
+vm.runInContext(
+  'swm = [[0,0], [0,0], [10,0]]; ci = [2,2,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
+  context,
+)
+s = state(context)
+assert.equal(
+  s.hearts.length,
+  0,
+  `replicata: set two swimmers to overlap each other while neither overlaps its own crush, then call updatehits()
+expectata: incidental overlap does not spawn hearts
+resultata: hearts.length is ${s.hearts.length}`,
 )
 assert.equal(
-  approx(sync[2][0], 0),
-  true,
-  `replicata: call syncstep([[0,0],[10,0],[0,10]], [1,2,0], 1)
-expectata: swimmer 2 uses swimmer 0's old x-coordinate, so its new x-coordinate stays 0
-resultata: swimmer 2's new x-coordinate is ${sync[2][0]}`,
-)
-assert.equal(
-  approx(sync[2][1], 9),
-  true,
-  `replicata: call syncstep([[0,0],[10,0],[0,10]], [1,2,0], 1)
-expectata: swimmer 2 moves one pixel toward swimmer 0's old position, landing at y=9
-resultata: swimmer 2's new y-coordinate is ${sync[2][1]}`,
+  s.pulses.length,
+  0,
+  `replicata: set two swimmers to overlap each other while neither overlaps its own crush, then call updatehits()
+expectata: incidental overlap does not spawn a merge pulse
+resultata: pulses.length is ${s.pulses.length}`,
 )
 
 vm.runInContext('setup()', context)
-let s = state(context)
+s = state(context)
+
+for (let i = 0; i < 1000 && s.hearts.length === 0; i++) {
+  vm.runInContext('draw()', context)
+  s = state(context)
+}
+
 assert.equal(
-  approx(s.swm[0][0], 788),
+  s.hearts.length > 0,
   true,
-  `replicata: load the app with ?ns=2&all=0 and call setup()
-expectata: swimmer 0 starts inset from the right edge at x=788
-resultata: swimmer 0's x-coordinate is ${s.swm[0][0]}`,
+  `replicata: load the app with ?ns=2&all=0 and keep calling draw() until swimmers collide
+expectata: the collision spawns floating hearts
+resultata: hearts.length is ${s.hearts.length}`,
 )
 assert.equal(
-  approx(s.swm[1][0], 212),
+  s.pulses.length > 0,
   true,
-  `replicata: load the app with ?ns=2&all=0 and call setup()
-expectata: swimmer 1 starts inset from the left edge at x=212
-resultata: swimmer 1's x-coordinate is ${s.swm[1][0]}`,
+  `replicata: load the app with ?ns=2&all=0 and keep calling draw() until swimmers collide
+expectata: the collision spawns a merge pulse
+resultata: pulses.length is ${s.pulses.length}`,
+)
+assert.equal(
+  s.hearts.every(h => h.h === s.hearthue),
+  true,
+  `replicata: load the app with ?ns=2&all=0 and keep calling draw() until swimmers collide
+expectata: every heart uses the zero-distance hue
+resultata: not every heart used hearthue=${s.hearthue}`,
 )
 
+const y = s.hearts[0].y
+const age = s.hearts[0].age
 vm.runInContext('draw()', context)
 s = state(context)
 assert.equal(
-  s.simstep,
-  0.2,
-  `replicata: load the app with ?ns=2&all=0 and inspect simstep
-expectata: each simulation substep is 0.2 pixels
-resultata: simstep is ${s.simstep}`,
-)
-assert.equal(
-  s.simsubsteps,
-  10,
-  `replicata: load the app with ?ns=2&all=0 and inspect simsubsteps
-expectata: each rendered frame performs 10 simulation substeps
-resultata: simsubsteps is ${s.simsubsteps}`,
-)
-assert.equal(
-  approx(s.swm[0][0], 786),
+  s.hearts[0].y < y,
   true,
-  `replicata: load the app with ?ns=2&all=0, call setup(), then call draw() once
-expectata: swimmer 0 advances 2 pixels in one rendered frame
-resultata: swimmer 0's x-coordinate is ${s.swm[0][0]}`,
+  `replicata: load the app with ?ns=2&all=0, wait for hearts to spawn, then call draw() once more
+expectata: the hearts float upward during the pause animation
+resultata: the first heart moved from y=${y} to y=${s.hearts[0].y}`,
 )
 assert.equal(
-  approx(s.swm[1][0], 214),
+  s.hearts[0].age > age,
   true,
-  `replicata: load the app with ?ns=2&all=0, call setup(), then call draw() once
-expectata: swimmer 1 advances 2 pixels in one rendered frame
-resultata: swimmer 1's x-coordinate is ${s.swm[1][0]}`,
+  `replicata: load the app with ?ns=2&all=0, wait for hearts to spawn, then call draw() once more
+expectata: the heart animation advances by one frame
+resultata: the first heart age moved from ${age} to ${s.hearts[0].age}`,
 )

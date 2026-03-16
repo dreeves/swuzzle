@@ -123,24 +123,26 @@ function state(context) {
   )
 }
 
-const context = loadApp('?ns=4&all=0', 320, 568)
+for (const [w, h] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
+  const context = loadApp('?ns=4&all=0', w, h)
 
-for (let i = 0; i < 5000 && !context.stopped; i++) {
-  vm.runInContext('draw()', context)
-}
+  for (let i = 0; i < 5000 && !context.stopped; i++) {
+    vm.runInContext('draw()', context)
+  }
 
-const s = state(context)
-assert.equal(
-  context.stopped,
-  true,
-  `replicata: load the app with ?ns=4&all=0 on a 320x568 screen and keep calling draw()
+  const s = state(context)
+  assert.equal(
+    context.stopped,
+    true,
+    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and keep calling draw()
 expectata: the run eventually completes instead of getting stuck on a near-1-pixel orbit
 resultata: stopped is ${context.stopped} after reaching n=${s.n} of ${s.ncrush}`,
-)
-assert.equal(
-  s.n,
-  s.ncrush,
-  `replicata: load the app with ?ns=4&all=0 on a 320x568 screen and keep calling draw()
+  )
+  assert.equal(
+    s.n,
+    s.ncrush,
+    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and keep calling draw()
 expectata: all 9 derangements eventually complete
 resultata: n is ${s.n} and ncrush is ${s.ncrush}`,
-)
+  )
+}

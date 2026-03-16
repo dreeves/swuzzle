@@ -90,16 +90,22 @@ function loadApp(search) {
 
 const der = loadApp('?ns=5&all=0')
 vm.runInContext('instructions()', der.context)
+assert.equal(
+  der.calls[0].s.startsWith('Amorous Swimmers'),
+  true,
+  `replicata: load the app with ?ns=5&all=0 and call instructions()
+expectata: the title line starts with "Amorous Swimmers" even if a version suffix is appended
+resultata: the title line was ${der.calls[0].s}`,
+)
 assert.deepEqual(
-  der.calls.map(c => c.s),
+  der.calls.slice(1).map(c => c.s),
   [
-    'Amorous Swimmers',
     '5 swimmers, 44 derangements',
     '(800x600 pixels)',
   ],
   `replicata: load the app with ?ns=5&all=0 and call instructions()
-expectata: the header shows the title, the swimmer/derangement counts, and the pixel count separately
-resultata: the text calls were ${JSON.stringify(der.calls.map(c => c.s))}`,
+expectata: the header shows the swimmer/derangement counts and the pixel count separately
+resultata: the trailing text calls were ${JSON.stringify(der.calls.slice(1).map(c => c.s))}`,
 )
 assert.equal(
   der.calls[2].x + der.context.textWidth(der.calls[2].s),
