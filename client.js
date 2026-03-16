@@ -86,7 +86,7 @@ function instructions(g = screen()) {
   const countline = allcrush ?
     `${ns} swimmers, ${ncrush} crush maps` :
     `${ns} swimmers, ${ncrush} derangements`
-  g.text('Amorous Swimmers v1931', 5, 15)
+  g.text('Amorous Swimmers v1932', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
@@ -299,20 +299,20 @@ function groupbox(g) {
 
 function spawnhit(i) {
   const p = midpoint(swm[i], swm[ci[i]])
+  const a = i / ns * TAU + TAU/8
+  const ox = cos(a)
+  const oy = sin(a)
   pulses.push({ cx: p[0], cy: p[1], r: headr * 1.35, age: 0, ttl: pulseframes })
-  hearts = hearts.concat(range(2).map(j => {
-    const a = (j + 0.5) / 2 * TAU
-    return {
-      h: hearthue,
-      x: p[0] + headr * 0.25 * cos(a),
-      y: p[1] - headr * 0.15 * sin(a),
-      dx: 0.22 * cos(a),
-      dy: 0.75 + 0.12 * (j % 2),
-      s: 10 + 2 * (j % 2),
-      age: 0,
-      ttl: heartframes + j,
-    }
-  }))
+  hearts.push({
+    h: hearthue,
+    x: p[0] + ox * headr * 0.9,
+    y: p[1] - headr * 0.15 - oy * headr * 0.9,
+    dx: ox * 0.12,
+    dy: 0.75 + oy * 0.05,
+    s: 11,
+    age: 0,
+    ttl: heartframes,
+  })
 }
 
 function updatehits() {
