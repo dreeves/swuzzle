@@ -124,8 +124,24 @@ resultata: swimmer 2's new y-coordinate is ${sync[2][1]}`,
 )
 
 vm.runInContext('setup()', context)
+let s = state(context)
+assert.equal(
+  approx(s.swm[0][0], 788),
+  true,
+  `replicata: load the app with ?ns=2&all=0 and call setup()
+expectata: swimmer 0 starts inset from the right edge at x=788
+resultata: swimmer 0's x-coordinate is ${s.swm[0][0]}`,
+)
+assert.equal(
+  approx(s.swm[1][0], 212),
+  true,
+  `replicata: load the app with ?ns=2&all=0 and call setup()
+expectata: swimmer 1 starts inset from the left edge at x=212
+resultata: swimmer 1's x-coordinate is ${s.swm[1][0]}`,
+)
+
 vm.runInContext('draw()', context)
-const s = state(context)
+s = state(context)
 assert.equal(
   s.simstep,
   1,
@@ -141,14 +157,14 @@ expectata: each rendered frame performs 2 simulation substeps
 resultata: simsubsteps is ${s.simsubsteps}`,
 )
 assert.equal(
-  approx(s.swm[0][0], 798),
+  approx(s.swm[0][0], 786),
   true,
   `replicata: load the app with ?ns=2&all=0, call setup(), then call draw() once
 expectata: swimmer 0 advances 2 pixels in one rendered frame
 resultata: swimmer 0's x-coordinate is ${s.swm[0][0]}`,
 )
 assert.equal(
-  approx(s.swm[1][0], 202),
+  approx(s.swm[1][0], 214),
   true,
   `replicata: load the app with ?ns=2&all=0, call setup(), then call draw() once
 expectata: swimmer 1 advances 2 pixels in one rendered frame

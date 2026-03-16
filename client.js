@@ -52,9 +52,13 @@ let si = [] // state of each swimmer (hot or cold)
 let patches = [] // saved pixel patches under swimmer heads
 let pauseframes = 0 // countdown for pause between derangements
 const headr = 6 // radius of the swimmer head dot
+const edgepad = headr + 6
 const simstep = 1
 const simsubsteps = 2
 const coalescepx = 3
+let baseswm = []
+let graphcorner = []
+let minipos = []
 
 // -----------------------------------------------------------------------------
 // Displaying things on the screen besides the actual swimmers
@@ -140,10 +144,11 @@ function infoup() {
 // corner is (0,0) and the bottom right is (n-1,n-1)
 function coort(x, y) {
   const n = min(width, height)
+  const span = n - 2*edgepad
   const dx = max(0, width - height)
   const dy = max(0, height - width - (2*infoh+5))
-  return [n/2 * (1+x) + dx,
-          n/2 * (1-y) + dy]
+  return [span/2 * (1+x) + dx + edgepad,
+          span/2 * (1-y) + dy + edgepad]
 }
 
 // Convert from polar to cartesian, with r=1 and the given theta, using pixel 
@@ -234,10 +239,8 @@ function bestCorner(positions) {
 // Draw mini graph in corner
 function drawMiniGraph() {
   const graphSize = 120
-  const corner = bestCorner(genswimmers(ns))
-  const centerX = corner[0]
-  const centerY = corner[1]
-  const radius = 40
+  const centerX = graphcorner[0]
+  const centerY = graphcorner[1]
   const gx = centerX - graphSize/2 - 10
   const gy = centerY - graphSize/2 - 10
 
@@ -245,13 +248,11 @@ function drawMiniGraph() {
   noStroke()
   fill(0, 0, 0, 0.7)
   rect(gx, gy, graphSize + 20, graphSize + 20)
-  
-  const miniPos = genMiniSwimmers(ns, centerX, centerY, radius)
-  
+
   // Draw arrows
   for (let i = 0; i < ns; i++) {
     if (i !== ci[i]) { // Don't draw self-arrows
-      drawArrow(miniPos[i], miniPos[ci[i]], 4)
+      drawArrow(minipos[i], minipos[ci[i]], 4)
     }
   }
   
@@ -259,11 +260,11 @@ function drawMiniGraph() {
   for (let i = 0; i < ns; i++) {
     noStroke()
     fill('White')
-    ellipse(miniPos[i][0], miniPos[i][1], 12)
+    ellipse(minipos[i][0], minipos[i][1], 12)
     fill('Black')
     textAlign(CENTER, CENTER)
     textSize(10)
-    text(i, miniPos[i][0], miniPos[i][1])
+    text(i, minipos[i][0], minipos[i][1])
   }
   
   // Reset text alignment
@@ -302,7 +303,7 @@ function setButtonState(button, enabled) {
 
 function loadCrushMap() {
   ci = allcrush ? nthCrush(ns, n) : derangements[n]
-  swm = genswimmers(ns)
+  swm = baseswm.map(([x, y]) => [x, y])
   for (let i = 0; i < swm.length; i++) {
     di[i] = pdist(swm[i], swm[ci[i]])
   }
@@ -342,9 +343,8 @@ function draw() {
     n += 1
     if (n >= ncrush) {
       // Clear the mini graph area
-      const corner = bestCorner(genswimmers(ns))
       noStroke(); fill(0, 0, 0)
-      rect(corner[0] - 80, corner[1] - 80, 160, 160)
+      rect(graphcorner[0] - 80, graphcorner[1] - 80, 160, 160)
       noLoop()
       return
     }
@@ -419,6 +419,10 @@ function setup() {
   background('Black')
   fill('BlueViolet')
   stroke('BlueViolet')
+
+  baseswm = genswimmers(ns)
+  graphcorner = bestCorner(baseswm)
+  minipos = genMiniSwimmers(ns, graphcorner[0], graphcorner[1], 40)
 
   //const y = -.95
   //swm = [coort(-.5, y), coort(.5, y)]
