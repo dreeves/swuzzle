@@ -17,13 +17,13 @@ nextperm, nthperm,
 const nsmin = 2
 const nsmax = 9
 const rawns = getQueryParam('ns', `${nsmin}`)
-const ns = Number(rawns)
+let ns = Number(rawns)
 const rawall = getQueryParam('all', '0')
 if (!/^\d+$/.test(rawns) || ns < nsmin || ns > nsmax)
   throw new Error(`Expected ns query parameter to be an integer from ${nsmin} to ${nsmax}; got ${rawns}`)
 if (rawall !== '0' && rawall !== '1')
   throw new Error(`Expected all query parameter to be 0 or 1; got ${rawall}`)
-const allcrush = rawall === '1'
+let allcrush = rawall === '1'
 window.history.replaceState({}, null, swuzurl(ns, allcrush))
 
 const pausems = 1000 // milliseconds to pause between derangements
@@ -31,8 +31,8 @@ const infoh = 26/2 // how many pixels high the info lines at the bottom are
 // Derangements: permutations with no fixed points (every swimmer chases someone else)
 // Crush map: each swimmer chooses a different swimmer to chase; multiple
 // swimmers may share a crush.
-const derangements = allDerangements(ns)
-const ncrush = allcrush ? crushCount(ns) : derangements.length
+let derangements = []
+let ncrush = 0
 const rainx = 5, rainy = 20, rainw = 422, rainh = 17 // rainbar position/size
 const buttonsz = 38
 const buttgap = 9
@@ -56,7 +56,7 @@ const pulseframes = 18
 const hearthue = blink(1)
 const bloopdur = 0.14
 const bloopf0 = 880
-const bloopgain = 0.045
+const bloopgain = 0.12
 const mingraphsz = 120
 const mingraphpad = 10
 const mingraphr = 40
@@ -66,10 +66,19 @@ let minipos = []
 let pulses = []
 let hearts = []
 let hitseen = new Set()
-let bloop = () => {}
+let audioCtx
 let trail
 let mingraph
 let overlay
+let backButton
+let fwdButton
+
+function recalcmode() {
+  derangements = allDerangements(ns)
+  ncrush = allcrush ? crushCount(ns) : derangements.length
+}
+
+recalcmode()
 
 // -----------------------------------------------------------------------------
 // Displaying things on the screen besides the actual swimmers
@@ -90,7 +99,7 @@ function instructions(g = screen()) {
   const countline = allcrush ?
     `${ns} swimmers, ${ncrush} crush maps` :
     `${ns} swimmers, ${ncrush} derangements`
-  g.text('Amorous Swimmers v1934', 5, 15)
+  g.text('Amorous Swimmers v2337', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
@@ -363,32 +372,27 @@ function spawnhit(i) {
   })
 }
 
-function playbloop(ctx, hits) {
-  const t = ctx.currentTime
+function bloop(hits) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  if (audioCtx.state === 'suspended') audioCtx.resume()
+
+  const t = audioCtx.currentTime
   const f = bloopf0 * 2 ** (-(hits-1)/18)
-  const osc = ctx.createOscillator()
-  const gain = ctx.createGain()
-  osc.type = 'triangle'
-  osc.frequency.setValueAtTime(f, t)
-  osc.frequency.exponentialRampToValueAtTime(f * 0.72, t + bloopdur)
+  const osc = audioCtx.createOscillator()
+  const gain = audioCtx.createGain()
+  
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(f * 0.7, t)
+  osc.frequency.exponentialRampToValueAtTime(f * 1.5, t + bloopdur * 0.5)
+  
   gain.gain.setValueAtTime(0.0001, t)
-  gain.gain.exponentialRampToValueAtTime(bloopgain, t + 0.015)
+  gain.gain.exponentialRampToValueAtTime(bloopgain, t + 0.02)
   gain.gain.exponentialRampToValueAtTime(0.0001, t + bloopdur)
+  
   osc.connect(gain)
-  gain.connect(ctx.destination)
+  gain.connect(audioCtx.destination)
   osc.start(t)
   osc.stop(t + bloopdur)
-}
-
-function unlockaudio() {
-  window.onpointerdown = null
-  window.onkeydown = null
-  window.ontouchstart = null
-  const ctx = new (window.AudioContext || window.webkitAudioContext)()
-  bloop = hits => {
-    ctx.resume()
-    playbloop(ctx, hits)
-  }
 }
 
 function updatehits() {
@@ -505,6 +509,39 @@ function loadCrushMap() {
   cacheMiniGraph()
 }
 
+function resetscene() {
+  n = 0
+  pauseframes = 0
+  pulses = []
+  hearts = []
+  trail.clear()
+  trail.background('Black')
+  trail.fill('BlueViolet')
+  trail.stroke('BlueViolet')
+  baseswm = genswimmers(ns)
+  graphcorner = bestCorner(baseswm)
+  minipos = genMiniSwimmers(ns, mingraphsz/2 + mingraphpad,
+                            mingraphsz/2 + mingraphpad, mingraphr)
+  loadCrushMap()
+  si = range(swm.length).map(x => 1)
+  instructions(trail)
+  rainbar(trail)
+  rainfill(progfrac(), trail)
+  drawoverlay(swmgroups())
+  composite()
+  setButtonState(backButton, ns > nsmin)
+  setButtonState(fwdButton, ns < nsmax)
+  window.loop?.()
+}
+
+function setmode(newns, newallcrush) {
+  ns = newns
+  allcrush = newallcrush
+  recalcmode()
+  rage(swuzurl(ns, allcrush), false)
+  resetscene()
+}
+
 function syncstep(points, crushes, step) {
   return points.map((p, i) => pairstep(p, points[crushes[i]], step))
 }
@@ -597,28 +634,10 @@ function setup() {
   trail.fill('BlueViolet')
   trail.stroke('BlueViolet')
 
-  baseswm = genswimmers(ns)
-  graphcorner = bestCorner(baseswm)
-  minipos = genMiniSwimmers(ns, mingraphsz/2 + mingraphpad,
-                            mingraphsz/2 + mingraphpad, mingraphr)
   mingraph = createGraphics(mingraphsz + 2*mingraphpad, mingraphsz + 2*mingraphpad)
   mingraph.colorMode(HSB, 1)
   overlay = createGraphics(windowWidth, windowHeight)
   overlay.colorMode(HSB, 1)
-
-  //const y = -.95
-  //swm = [coort(-.5, y), coort(.5, y)]
-  //initd = dist(swm[0][0], swm[0][1], swm[1][0], swm[1][1])
-  loadCrushMap()
-  //ci = range(swm.length).map(x => (x+1)%swm.length) // tmp
-  si = range(swm.length).map(x => 1)
-  //swm.map(p => { ellipse(p[0], p[1], 8) })
-  
-  instructions(trail)
-  rainbar(trail)  
-  rainfill(progfrac(), trail)
-  drawoverlay(swmgroups())
-  composite()
 
   const crushBox = createCheckbox('all crush maps', allcrush)
   crushBox.position(2, buttony + 2)
@@ -626,23 +645,25 @@ function setup() {
   crushBox.style('font-size', '14px')
   crushBox.style('user-select', 'none')
   crushBox.style('accent-color', '#333')
-  crushBox.changed(() => rage(swuzurl(ns, crushBox.checked())))
+  crushBox.changed(() => {
+    setmode(ns, crushBox.checked())
+  })
   
-  const backButton = createButton('◀️')
+  backButton = createButton('◀️')
   backButton.position(backx(), buttony)
   styleButton(backButton)
-  setButtonState(backButton, ns > nsmin)
-  backButton.mousePressed(() => rage(swuzurl(ns-1, allcrush)))
+  backButton.mousePressed(() => {
+    setmode(ns-1, allcrush)
+  })
 
-  const fwdButton = createButton('▶️')
+  fwdButton = createButton('▶️')
   fwdButton.position(fwdx(), buttony)
   styleButton(fwdButton)
-  setButtonState(fwdButton, ns < nsmax)
-  fwdButton.mousePressed(() => rage(swuzurl(ns+1, allcrush)))
+  fwdButton.mousePressed(() => {
+    setmode(ns+1, allcrush)
+  })
 
-  window.onpointerdown = unlockaudio
-  window.onkeydown = unlockaudio
-  window.ontouchstart = unlockaudio
+  resetscene()
 
   //stroke('white')
 }

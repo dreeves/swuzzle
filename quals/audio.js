@@ -6,23 +6,33 @@ const vm = require('node:vm')
 const utilsrc = fs.readFileSync(path.join(__dirname, '..', 'utils.js'), 'utf8')
 const clientsrc = fs.readFileSync(path.join(__dirname, '..', 'client.js'), 'utf8')
 
+;(async () => {
+
 function loadApp(search) {
   const tones = []
+  const contexts = []
+  const buttons = []
   class AudioContextStub {
     constructor() {
       this.currentTime = 1
       this.destination = {}
+      this.resumeCalls = 0
+      this.state = 'suspended'
+      contexts.push(this)
     }
-    resume() {}
+    resume() {
+      this.resumeCalls += 1
+      this.state = 'running'
+    }
     createOscillator() {
       const tone = { set: [], ramp: [], type: null, stop: null, start: null }
       tones.push(tone)
       return {
-        set toneType(v) { tone.type = v },
-        get toneType() { return tone.type },
         set type(v) { tone.type = v },
         get type() { return tone.type },
         frequency: {
+          set value(v) { tone.freq = v },
+          get value() { return tone.freq },
           setValueAtTime(v, t) { tone.set.push({ v, t }) },
           exponentialRampToValueAtTime(v, t) { tone.ramp.push({ v, t }) },
         },
@@ -31,6 +41,10 @@ function loadApp(search) {
         stop(t) { tone.stop = t },
       }
     }
+    createBufferSource() {
+      return { buffer: null, connect() {}, start() {} }
+    }
+    createBuffer() { return {} }
     createGain() {
       return {
         gain: {
@@ -48,12 +62,19 @@ function loadApp(search) {
     document: { body: { appendChild() {} } },
     window: {
       location: { search },
-      history: { replaceState() {}, pushState() {} },
+      history: {
+        replaceState() {},
+        pushState() { context.pushes += 1 },
+      },
       AudioContext: AudioContextStub,
       webkitAudioContext: AudioContextStub,
+      loop() { context.loopCalls += 1 },
     },
-    location: { reload() {} },
+    location: { reload() { context.reloads += 1 } },
     HTMLCanvasElement: function HTMLCanvasElement() {},
+    pushes: 0,
+    reloads: 0,
+    loopCalls: 0,
     windowWidth: 800,
     windowHeight: 600,
     width: 800,
@@ -104,13 +125,15 @@ function loadApp(search) {
     frameRate() {},
     randreal(a, b) { return (a + b) / 2 },
     createButton() {
-      return {
+      const button = {
         position() {},
         style() {},
-        mousePressed() {},
+        mousePressed(fn) { this.onclick = fn },
         attribute() {},
         removeAttribute() {},
       }
+      buttons.push(button)
+      return button
     },
     createGraphics() {
       return {
@@ -149,12 +172,30 @@ function loadApp(search) {
   vm.runInContext(utilsrc, context, { filename: 'utils.js' })
   vm.runInContext(clientsrc, context, { filename: 'client.js' })
   vm.runInContext('setup()', context)
-  return { context, tones }
+  return { context, tones, contexts, buttons }
 }
 
-const { context, tones } = loadApp('?ns=3&all=0')
+const { context, tones, contexts } = loadApp('?ns=3&all=0')
+vm.runInContext(
+  'swm = [[0,0], [1,0], [10,0]]; ci = [1,2,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
+  context,
+)
+assert.equal(
+  tones.length,
+  0,
+  `replicata: load the app, let a swimmer reach its crush before the first audio-unlock gesture, and inspect the scheduled tones
+expectata: no tone is scheduled yet because audio is still locked
+resultata: ${tones.length} bloops were scheduled before unlock`,
+)
 vm.runInContext('window.onpointerdown()', context)
-
+assert.equal(
+  contexts.length,
+  1,
+  `replicata: load the app and trigger the first audio-unlock gesture
+expectata: exactly one audio context is created for that unlock
+resultata: ${contexts.length} audio contexts were created`,
+)
+// After unlock, hits produce tones synchronously (and each bloop also calls resume)
 vm.runInContext(
   'swm = [[0,0], [1,0], [10,0]]; ci = [1,2,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
   context,
@@ -162,12 +203,12 @@ vm.runInContext(
 assert.equal(
   tones.length,
   1,
-  `replicata: unlock audio, arrange exactly one swimmer to reach its crush, then call updatehits()
-expectata: one bloop is scheduled
+  `replicata: unlock audio, arrange one swimmer to reach its crush, then call updatehits()
+expectata: one bloop is scheduled immediately
 resultata: ${tones.length} bloops were scheduled`,
 )
 
-const one = tones[0].set[0].v
+const one = tones[0].freq
 vm.runInContext(
   'swm = [[0,0], [0,0], [10,0]]; ci = [1,0,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
   context,
@@ -180,7 +221,7 @@ expectata: one additional bloop is scheduled for that hit frame
 resultata: ${tones.length} bloops were scheduled total`,
 )
 
-const two = tones[1].set[0].v
+const two = tones[1].freq
 assert.equal(
   two < one,
   true,
@@ -188,3 +229,42 @@ assert.equal(
 expectata: the two-hit bloop starts at a lower pitch
 resultata: the one-hit frequency was ${one} and the two-hit frequency was ${two}`,
 )
+
+const ctl = loadApp('?ns=3&all=0')
+ctl.buttons[1].onclick()
+assert.equal(
+  ctl.context.reloads,
+  0,
+  `replicata: load the app and use the forward-arrow control as the first user gesture
+expectata: the app updates in place without a page reload so audio can persist
+resultata: location.reload() was called ${ctl.context.reloads} times`,
+)
+assert.equal(
+  ctl.context.pushes,
+  1,
+  `replicata: load the app and use the forward-arrow control as the first user gesture
+expectata: the URL still updates once for the new mode
+resultata: history.pushState() was called ${ctl.context.pushes} times`,
+)
+assert.equal(
+  ctl.contexts.length,
+  1,
+  `replicata: load the app and use the forward-arrow control as the first user gesture
+expectata: that gesture unlocks exactly one audio context
+resultata: ${ctl.contexts.length} audio contexts were created`,
+)
+vm.runInContext(
+  'swm = [[0,0], [1,0], [10,0], [20,0]]; ci = [1,2,3,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
+  ctl.context,
+)
+assert.equal(
+  ctl.tones.length,
+  1,
+  `replicata: load the app, use the forward-arrow control as the first user gesture, then arrange one crush-hit in the new mode
+expectata: one bloop is scheduled after that in-place mode change
+resultata: ${ctl.tones.length} bloops were scheduled`,
+)
+})().catch(err => {
+  console.error(err)
+  process.exit(1)
+})
