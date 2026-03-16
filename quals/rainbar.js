@@ -120,13 +120,23 @@ const context = loadApp('?ns=4&all=0')
 
 assert.equal(
   vm.runInContext('progfrac()', context),
-  vm.runInContext('1 / ncrush', context),
+  0,
   `replicata: load the app with ?ns=4&all=0 and call setup()
-expectata: the active first derangement fills one ncrush-th of the rainbar
+expectata: the first derangement starts with zero completed progress
+resultata: progfrac() is ${vm.runInContext('progfrac()', context)}`,
+)
+
+vm.runInContext('draw()', context)
+assert.equal(
+  vm.runInContext('progfrac() > 0', context),
+  true,
+  `replicata: load the app with ?ns=4&all=0, call setup(), then call draw() once
+expectata: the rainbar updates in real time during the first derangement
 resultata: progfrac() is ${vm.runInContext('progfrac()', context)}`,
 )
 
 vm.runInContext('n = ncrush - 1', context)
+vm.runInContext('swm = swm.map(() => [0, 0])', context)
 assert.equal(
   vm.runInContext('progfrac()', context),
   1,
