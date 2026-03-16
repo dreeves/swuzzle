@@ -26,10 +26,10 @@ if (rawall !== '0' && rawall !== '1')
 let allcrush = rawall === '1'
 window.history.replaceState({}, null, swuzurl(ns, allcrush))
 
-const pausems = 1000 // milliseconds to pause between derangements
+let pausems = 250 // milliseconds to pause between derangements / crushmaps
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
-// Derangements: permutations with no fixed points (every swimmer chases someone else)
-// Crush map: each swimmer chooses a different swimmer to chase; multiple
+// Derangement: permutation w/o fixed points (each swimmer chases someone else)
+// Crushmap: each swimmer chooses a different swimmer to chase; multiple
 // swimmers may share a crush.
 let derangements = []
 let ncrush = 0
@@ -46,10 +46,16 @@ let ci = [] // indexes of crushes
 let di = [] // initial distances from crushes
 let si = [] // state of each swimmer (hot or cold)
 let pauseframes = 0 // countdown for pause between derangements
+let coalesced = false // whether we are waiting between derangements
 const headr = 6 // radius of the swimmer head dot
 const edgepad = headr + 6
-const simstep = 0.2
-const simsubsteps = 10
+let simspeed = 3 // principled visual speed multiplier
+const simstep = 0.5 // small enough that the radius-2 trail dots overlap perfectly
+let simsubsteps = Math.round(4 * simspeed) // steps per visual frame
+let simPaused = false
+let simStepPulse = false
+let speedBtns = []
+let activeSpeed = '250'
 const coalescepx = 3
 const heartframes = 36
 const pulseframes = 18
@@ -66,12 +72,12 @@ let minipos = []
 let pulses = []
 let hearts = []
 let hitseen = new Set()
+let playBloops = true
 let audioCtx
 let trail
 let mingraph
 let overlay
-let backButton
-let fwdButton
+let nsInput
 
 function recalcmode() {
   derangements = allDerangements(ns)
@@ -97,9 +103,9 @@ function instructions(g = screen()) {
   const rw = rainwid()
   const pixline = `(${width}x${height} pixels)`
   const countline = allcrush ?
-    `${ns} swimmers, ${ncrush} crush maps` :
+    `${ns} swimmers, ${ncrush} crushmaps` :
     `${ns} swimmers, ${ncrush} derangements`
-  g.text('Amorous Swimmers v2337', 5, 15)
+  g.text('Amorous Swimmers', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
@@ -109,10 +115,6 @@ function swuzurl(n, all) { return `?ns=${n}&all=${all ? 1 : 0}` }
 function rainwid() { return max(0, min(rainw, width - 2*rainx)) }
 
 function uiright() { return rainx + rainwid() }
-
-function fwdx() { return max(rainx + buttonsz + buttgap, uiright() - buttonsz) }
-
-function backx() { return fwdx() - buttonsz - buttgap }
 
 function rainbar(g = screen()) {
   g.stroke(0, 0, 0.3) // dim gray outline
@@ -373,6 +375,7 @@ function spawnhit(i) {
 }
 
 function bloop(hits) {
+  if (!playBloops) return
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
 
   const t = audioCtx.currentTime
@@ -473,6 +476,47 @@ function composite() {
   image(overlay, 0, 0)
 }
 
+function setSpeed(sp) {
+  if (sp === 'step') {
+    if (simPaused) {
+      simStepPulse = true // Step once
+      if (coalesced) pauseframes = 0 // Instantly break through pause period
+    } else {
+      simPaused = true // Pause if running
+      activeSpeed = 'step'
+    }
+  } else {
+    simPaused = false
+    activeSpeed = sp
+    if (sp === '1000') { // Snail
+      simspeed = 0.5; pausems = 1000
+    } else if (sp === '500') { // Turtle
+      simspeed = 1; pausems = 500
+    } else if (sp === '250') { // Rabbit
+      simspeed = 3; pausems = 250
+    } else if (sp === '100') { // Rocket
+      simspeed = 10; pausems = 50
+    } else if (sp === '0') { // Lightning
+      simspeed = 30; pausems = 0
+    }
+    simsubsteps = Math.max(1, Math.round(4 * simspeed))
+  }
+  updateSpeedButtons()
+}
+
+function updateSpeedButtons() {
+  speedBtns.forEach(btn => {
+    let sp = btn.attribute('data-speed')
+    if (sp === 'step') {
+      btn.html(simPaused ? '↩️' : '⏸️')
+      btn.style('background-color', (simPaused) ? '#20B2AA' : '#333')
+    } else {
+      let isActive = (!simPaused && activeSpeed === sp)
+      btn.style('background-color', isActive ? '#20B2AA' : '#333')
+    }
+  })
+}
+
 function styleButton(button) {
   button.style('background-color', '#333')
   button.style('color', 'white')
@@ -484,18 +528,6 @@ function styleButton(button) {
   button.style('font-size', '18px')
   button.style('cursor', 'pointer')
   button.style('box-shadow', '0 2px 4px rgba(0, 0, 0, 0.5)')
-}
-
-function setButtonState(button, enabled) {
-  if (enabled) {
-    button.style('background-color', '#333')
-    button.style('color', 'white')
-    button.removeAttribute('disabled')
-  } else {
-    button.style('background-color', '#666')
-    button.style('color', '#222')
-    button.attribute('disabled', '')
-  }
 }
 
 function loadCrushMap() {
@@ -511,6 +543,7 @@ function loadCrushMap() {
 function resetscene() {
   n = 0
   pauseframes = 0
+  coalesced = false
   pulses = []
   hearts = []
   trail.clear()
@@ -528,8 +561,7 @@ function resetscene() {
   rainfill(progfrac(), trail)
   drawoverlay(swmgroups())
   composite()
-  setButtonState(backButton, ns > nsmin)
-  setButtonState(fwdButton, ns < nsmax)
+  if (nsInput) nsInput.value(Math.floor(ns))
   window.loop?.()
 }
 
@@ -583,15 +615,25 @@ function advanceswimmers() {
 // -----------------------------------------------------------------------------
 
 function draw() {
+  if (simPaused && !simStepPulse) {
+    composite()
+    drawfx()
+    return
+  }
+  simStepPulse = false
+
   // During pause, keep heads visible at coalesced positions
-  if (pauseframes > 0) {
-    pauseframes -= 1
+  if (coalesced) {
+    if (pauseframes > 0) {
+      pauseframes -= 1
+    }
     if (pauseframes > 0) {
       agefx()
       composite()
       drawfx()
       return
     }
+    coalesced = false
     n += 1
     if (n >= ncrush) {
       overlay.clear()
@@ -603,6 +645,7 @@ function draw() {
     console.log(ci)
   } else {
     if (advanceswimmers()) {
+      coalesced = true
       pauseframes = Math.round(pausems / 1000 * 60)
     }
   }
@@ -638,9 +681,33 @@ function setup() {
   overlay = createGraphics(windowWidth, windowHeight)
   overlay.colorMode(HSB, 1)
 
-  const crushBox = createCheckbox('all crush maps', allcrush)
-  crushBox.position(2, buttony + 2)
+  let px = rainx
+
+  nsInput = createInput(ns.toString(), 'number')
+  nsInput.position(px, buttony + 3)
+  nsInput.size(46, 32)
+  nsInput.style('font-size', '16px')
+  nsInput.style('border-radius', '4px')
+  nsInput.style('text-align', 'center')
+  nsInput.style('border', 'none')
+  nsInput.style('background-color', '#333')
+  nsInput.style('color', 'white')
+  nsInput.style('padding', '0')
+  nsInput.attribute('min', nsmin)
+  nsInput.attribute('max', nsmax)
+  nsInput.attribute('title', 'Number of swimmers')
+  nsInput.input(() => {
+    let v = parseInt(nsInput.value())
+    if (v >= nsmin && v <= nsmax && v !== ns) {
+      setmode(v, allcrush)
+    }
+  })
+  px += 58
+
+  const crushBox = createCheckbox('all crushmaps', allcrush)
+  crushBox.position(px, buttony)
   crushBox.style('color', 'white')
+  crushBox.style('font-family', 'sans-serif')
   crushBox.style('font-size', '14px')
   crushBox.style('user-select', 'none')
   crushBox.style('accent-color', '#333')
@@ -648,19 +715,40 @@ function setup() {
     setmode(ns, crushBox.checked())
   })
   
-  backButton = createButton('◀️')
-  backButton.position(backx(), buttony)
-  styleButton(backButton)
-  backButton.mousePressed(() => {
-    setmode(ns-1, allcrush)
+  const bloopBox = createCheckbox('bloops', playBloops)
+  bloopBox.position(px, buttony + 20)
+  bloopBox.style('color', 'white')
+  bloopBox.style('font-family', 'sans-serif')
+  bloopBox.style('font-size', '14px')
+  bloopBox.style('user-select', 'none')
+  bloopBox.style('accent-color', '#333')
+  bloopBox.changed(() => {
+    playBloops = bloopBox.checked()
   })
 
-  fwdButton = createButton('▶️')
-  fwdButton.position(fwdx(), buttony)
-  styleButton(fwdButton)
-  fwdButton.mousePressed(() => {
-    setmode(ns+1, allcrush)
+  px += 135 // no longer used for buttons directly
+  
+  const speeds = [
+    { sp: 'step', em: '⏸️', title: 'Pause/Step' },
+    { sp: '1000', em: '🐌', title: 'Snail' },
+    { sp: '500',  em: '🐢', title: 'Turtle' },
+    { sp: '250',  em: '🐇', title: 'Rabbit' },
+    { sp: '100',  em: '🚀', title: 'Rocket' },
+    { sp: '0',    em: '⚡️', title: 'Lightning' },
+  ]
+  const btnswidth = speeds.length * buttonsz + (speeds.length - 1) * 4
+  const btnpx = rainx + rainwid() - btnswidth
+  
+  speeds.forEach((s, idx) => {
+    let b = createButton(s.em)
+    b.position(btnpx + idx * (buttonsz + 4), buttony)
+    styleButton(b)
+    b.attribute('data-speed', s.sp)
+    b.attribute('title', s.title)
+    b.mousePressed(() => setSpeed(s.sp))
+    speedBtns.push(b)
   })
+  setSpeed('250') // Initialize default state properly
 
   resetscene()
 
