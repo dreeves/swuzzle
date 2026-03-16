@@ -11,6 +11,7 @@ function loadApp(search) {
     Math,
     Number,
     console: { log() {} },
+    document: { body: { appendChild() {} } },
     window: {
       location: { search },
       history: { replaceState() {}, pushState() {} },
@@ -58,7 +59,7 @@ function loadApp(search) {
     textAlign() {},
     drawingContext: {
       getImageData() { return { data: [] } },
-      putImageData() { context.restores += 1 },
+      putImageData() {},
     },
     pixelDensity() { return 1 },
     noLoop() { context.stopped = true },
@@ -78,18 +79,23 @@ function loadApp(search) {
     },
     createGraphics() {
       return {
-        clear() {},
+        canvas: { style: {} },
+        clear() { context.clears += 1 },
         colorMode() {},
+        background() {},
         noStroke() {},
+        noFill() {},
         fill() {},
         rect() {},
         stroke() {},
         strokeWeight() {},
         line() {},
         ellipse() {},
+        image() {},
         textAlign() {},
         textSize() {},
         text() {},
+        textWidth() { return 0 },
       }
     },
     createCheckbox(label, checked) {
@@ -102,7 +108,7 @@ function loadApp(search) {
         checked() { return this.checkedValue },
       }
     },
-    restores: 0,
+    clears: 0,
     stopped: false,
   }
   context.HTMLCanvasElement.prototype = { getContext() { return {} } }
@@ -187,15 +193,15 @@ assert.equal(
 expectata: the app is still running during the final pause
 resultata: stopped is ${context.stopped}`,
 )
-const restores = context.restores
+const clears = context.clears
 
 for (let i = 0; i < s.pauseframes - 1; i++) draw(context)
 assert.equal(
-  context.restores,
-  restores,
+  context.clears,
+  clears,
   `replicata: load the app with ?ns=2 and advance to one frame before the end of the final pause
-expectata: the heads are still paused and no patches have been restored yet
-resultata: putImageData was called ${context.restores - restores} additional times`,
+expectata: the heads are still paused and the overlay has not been cleared yet
+resultata: clear() was called ${context.clears - clears} additional times`,
 )
 assert.equal(
   context.stopped,
@@ -214,9 +220,9 @@ expectata: the app stops when the pause expires
 resultata: stopped is ${context.stopped}`,
 )
 assert.equal(
-  context.restores > restores,
+  context.clears > clears,
   true,
   `replicata: load the app with ?ns=2 and advance through the full final pause
-expectata: the final frame restores the saved patches so the white head disappears
-resultata: putImageData was called ${context.restores - restores} additional times`,
+expectata: the final frame clears the overlay so the white head disappears
+resultata: clear() was called ${context.clears - clears} additional times`,
 )

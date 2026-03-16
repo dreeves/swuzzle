@@ -10,13 +10,6 @@ nextperm, nthperm,
 
 //new p5() // including this lets you use p5's globals everywhere (not needed now)
 
-// Ensure canvas 2d contexts are optimized for frequent getImageData calls
-const _origGetContext = HTMLCanvasElement.prototype.getContext
-HTMLCanvasElement.prototype.getContext = function(type, attrs = {}) {
-  if (type === '2d') attrs.willReadFrequently = true
-  return _origGetContext.call(this, type, attrs)
-}
-
 // -----------------------------------------------------------------------------
 // Constants, Parameters, and Global Variables
 // -----------------------------------------------------------------------------
@@ -49,7 +42,6 @@ let crushline = '' // text line with crush relationships
 let ci = [] // indexes of crushes
 let di = [] // initial distances from crushes
 let si = [] // state of each swimmer (hot or cold)
-let patches = [] // saved pixel patches under swimmer heads
 let pauseframes = 0 // countdown for pause between derangements
 const headr = 6 // radius of the swimmer head dot
 const edgepad = headr + 6
@@ -62,39 +54,47 @@ const mingraphr = 40
 let baseswm = []
 let graphcorner = []
 let minipos = []
+let trail
 let mingraph
+let overlay
 
 // -----------------------------------------------------------------------------
 // Displaying things on the screen besides the actual swimmers
 // -----------------------------------------------------------------------------
 
-function instructions() {
-  stroke('Black'); fill('White')
-  textSize(15)
+function screen() {
+  return {
+    stroke, fill, textSize, text, textWidth, noFill, rect, noStroke, ellipse,
+  }
+}
+
+function instructions(g = screen()) {
+  g.stroke('Black'); g.fill('White')
+  g.textSize(15)
   const pixline = `(${width}x${height} pixels)`
   const countline = allcrush ?
     `${ns} swimmers, ${ncrush} crush maps` :
     `${ns} swimmers, ${ncrush} derangements`
-  text('Amorous Swimmers', 5, 15)
-  text(countline, 5, rainy + rainh + 15)
-  text(pixline, rainx + rainw - textWidth(pixline), rainy + rainh + 15)
+  g.text('Amorous Swimmers', 5, 15)
+  g.text(countline, 5, rainy + rainh + 15)
+  g.text(pixline, rainx + rainw - g.textWidth(pixline), rainy + rainh + 15)
 }
 
 function swuzurl(n, all) { return `?ns=${n}&all=${all ? 1 : 0}` }
 
-function rainbar() {
-  stroke(0, 0, 0.3) // dim gray outline
-  noFill()
-  rect(rainx, rainy, rainw, rainh)
+function rainbar(g = screen()) {
+  g.stroke(0, 0, 0.3) // dim gray outline
+  g.noFill()
+  g.rect(rainx, rainy, rainw, rainh)
 }
 
 // Fill the rainbow bar proportionally to progress (0 to 1)
-function rainfill(frac) {
-  noStroke()
+function rainfill(frac, g = screen()) {
+  g.noStroke()
   const w = Math.round(rainw * frac)
   for (let i = 0; i <= w; i++) {
-    fill(blink(i/rainw), 1, 1)
-    rect(rainx+i, rainy, 1, rainh)
+    g.fill(blink(i/rainw), 1, 1)
+    g.rect(rainx+i, rainy, 1, rainh)
   }
 }
 
@@ -241,17 +241,57 @@ function bestCorner(positions) {
 }
 
 // Draw mini graph in corner
-function drawMiniGraph() {
-  image(mingraph,
-        graphcorner[0] - mingraphsz/2 - mingraphpad,
-        graphcorner[1] - mingraphsz/2 - mingraphpad)
+function drawMiniGraph(g) {
+  g.image(mingraph,
+          graphcorner[0] - mingraphsz/2 - mingraphpad,
+          graphcorner[1] - mingraphsz/2 - mingraphpad)
 }
 
-function traildots() {
+function traildots(g = screen()) {
   for (let i = 0; i < swm.length; i++) {
-    fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
-    ellipse(swm[i][0], swm[i][1], 2)
+    g.fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
+    g.ellipse(swm[i][0], swm[i][1], 2)
   }
+}
+
+function drawHeads() {
+  // Group swimmers by proximity (within 2px = converged)
+  // Treat swimmers closer than coalescepx as visually coalesced.
+  const groups = []
+  for (let i = 0; i < swm.length; i++) {
+    const g = groups.find(g => g.some(j => pdist(swm[i], swm[j]) < coalescepx))
+    if (g) g.push(i); else groups.push([i])
+  }
+  // Then draw all heads (area proportional to group size)
+  // Numbers arranged in a mini circle inside the head
+  overlay.noStroke()
+  overlay.textAlign(CENTER, CENTER)
+  overlay.textSize(9)
+  for (const g of groups) {
+    const r = headr * sqrt(g.length)
+    const cx = swm[g[0]][0], cy = swm[g[0]][1]
+    overlay.fill(1, 0, 1) // bright white head
+    overlay.ellipse(cx, cy, r * 2)
+    overlay.fill(0, 0, 0) // black numbers
+    const off = g.length === 1 ? 0 : r * 0.45
+    for (let j = 0; j < g.length; j++) {
+      const a = j / g.length * TAU + TAU/8 // TAU/8 makes pairs kitty-corner
+      overlay.text(g[j], cx + off * cos(a), cy - off * sin(a))
+    }
+  }
+  overlay.textAlign(LEFT, BASELINE)
+}
+
+function drawoverlay() {
+  overlay.clear()
+  drawHeads()
+  drawMiniGraph(overlay)
+}
+
+function composite() {
+  clear()
+  image(trail, 0, 0)
+  image(overlay, 0, 0)
 }
 
 function styleButton(button) {
@@ -317,7 +357,7 @@ function advanceswimmers() {
   let allquiesced = false
   for (let i = 0; i < simsubsteps; i++) {
     swm = syncstep(swm, ci, simstep)
-    traildots()
+    traildots(trail)
     allquiesced = swm.every((p, j) => pdist(p, swm[ci[j]]) <= simstep)
   }
   return allquiesced
@@ -328,34 +368,20 @@ function advanceswimmers() {
 // -----------------------------------------------------------------------------
 
 function draw() {
-  const ctx = drawingContext
-  const pd = pixelDensity()
-
   // During pause, keep heads visible at coalesced positions
   if (pauseframes > 0) {
     pauseframes -= 1
     if (pauseframes > 0) return
-    // Pause just ended — restore old heads, start next derangement
-    for (let i = 0; i < patches.length; i++) {
-      ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
-    }
-    patches = []
     n += 1
     if (n >= ncrush) {
-      // Clear the mini graph area
-      noStroke(); fill(0, 0, 0)
-      rect(graphcorner[0] - 80, graphcorner[1] - 80, 160, 160)
+      overlay.clear()
+      composite()
       noLoop()
       return
     }
     loadCrushMap()
     console.log(ci)
   } else {
-    // Restore pixels under old heads (putImageData = direct pixel copy, no alpha)
-    for (let i = 0; i < patches.length; i++) {
-      ctx.putImageData(patches[i].data, patches[i].x * pd, patches[i].y * pd)
-    }
-
     if (advanceswimmers()) {
       pauseframes = Math.round(pausems / 1000 * 60)
     }
@@ -366,48 +392,9 @@ function draw() {
   //const s2 = [midpoint(swm[0], swm[1], step/d), [swm[1][0], swm[1][1] - step]]
   //line(swm[0][0], swm[0][1], s2[1][0], s2[1][1])
   //swm = s2
-  // Draw trail dots
-  // Group swimmers by proximity (within 2px = converged)
-  // Treat swimmers closer than coalescepx as visually coalesced.
-  const groups = []
-  for (let i = 0; i < swm.length; i++) {
-    const g = groups.find(g => g.some(j => pdist(swm[i], swm[j]) < coalescepx))
-    if (g) g.push(i); else groups.push([i])
-  }
-  // Save all patches first (before any heads are drawn)
-  // maxpad covers the largest possible circle (all ns swimmers converged)
-  patches = []
-  const maxr = headr * sqrt(ns)
-  const maxpad = maxr + 2
-  const maxs = maxpad * 2 * pd
-  for (const g of groups) {
-    const x = Math.round(swm[g[0]][0]) - maxpad
-    const y = Math.round(swm[g[0]][1]) - maxpad
-    patches.push({ data: ctx.getImageData(x * pd, y * pd, maxs, maxs), x, y })
-  }
-  // Then draw all heads (area proportional to group size)
-  // Numbers arranged in a mini circle inside the head
-  noStroke()
-  textAlign(CENTER, CENTER)
-  textSize(9)
-  for (const g of groups) {
-    const r = headr * sqrt(g.length)
-    const cx = swm[g[0]][0], cy = swm[g[0]][1]
-    fill(1, 0, 1) // bright white head
-    ellipse(cx, cy, r * 2)
-    fill(0, 0, 0) // black numbers
-    const off = g.length === 1 ? 0 : r * 0.45
-    for (let j = 0; j < g.length; j++) {
-      const a = j / g.length * TAU + TAU/8 // TAU/8 makes pairs kitty-corner
-      text(g[j], cx + off * cos(a), cy - off * sin(a))
-    }
-  }
-  textAlign(LEFT, BASELINE)
-  //swm.map(p => { ellipse(p[0], p[1], 1) })
-  //infoup()
-  //noStroke() // Restore no stroke for swimmers
-  drawMiniGraph()
-  rainfill(n / ncrush)
+  drawoverlay()
+  rainfill(n / ncrush, trail)
+  composite()
 }
 
 function setup() {
@@ -415,10 +402,12 @@ function setup() {
   console.log(`Canvas created. Screen is ${width}x${height} pixels`)
   frameRate(60) // 60 fps is about the most it can do
   colorMode(HSB, 1)
-  clear()
-  background('Black')
-  fill('BlueViolet')
-  stroke('BlueViolet')
+  trail = createGraphics(windowWidth, windowHeight)
+  trail.colorMode(HSB, 1)
+  trail.clear()
+  trail.background('Black')
+  trail.fill('BlueViolet')
+  trail.stroke('BlueViolet')
 
   baseswm = genswimmers(ns)
   graphcorner = bestCorner(baseswm)
@@ -426,6 +415,8 @@ function setup() {
                             mingraphsz/2 + mingraphpad, mingraphr)
   mingraph = createGraphics(mingraphsz + 2*mingraphpad, mingraphsz + 2*mingraphpad)
   mingraph.colorMode(HSB, 1)
+  overlay = createGraphics(windowWidth, windowHeight)
+  overlay.colorMode(HSB, 1)
 
   //const y = -.95
   //swm = [coort(-.5, y), coort(.5, y)]
@@ -435,8 +426,10 @@ function setup() {
   si = range(swm.length).map(x => 1)
   //swm.map(p => { ellipse(p[0], p[1], 8) })
   
-  instructions()
-  rainbar()  
+  instructions(trail)
+  rainbar(trail)  
+  drawoverlay()
+  composite()
 
   const crushBox = createCheckbox('all crush maps', allcrush)
   crushBox.position(2, 86)

@@ -12,6 +12,7 @@ function loadApp(search) {
     Math,
     Number,
     console: { log() {} },
+    document: { body: { appendChild() {} } },
     window: {
       location: { search },
       history: { replaceState() {} },
@@ -79,18 +80,23 @@ function loadApp(search) {
     },
     createGraphics() {
       return {
+        canvas: { style: {} },
         clear() {},
         colorMode() {},
+        background() {},
         noStroke() {},
+        noFill() {},
         fill() {},
         rect() {},
         stroke() {},
         strokeWeight() {},
         line() {},
         ellipse() {},
+        image() {},
         textAlign() {},
         textSize() {},
         text() {},
+        textWidth() { return 0 },
       }
     },
     checks: [],

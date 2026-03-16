@@ -11,6 +11,7 @@ function loadApp(search) {
     Math,
     Number,
     console: { log() {} },
+    document: { body: { appendChild() {} } },
     window: {
       location: { search },
       history: { replaceState() {}, pushState() {} },
@@ -50,6 +51,7 @@ function loadApp(search) {
     clear() {},
     background() {},
     line() {},
+    image() {},
     rect() {},
     point() {},
     ellipse() {},
@@ -86,23 +88,71 @@ function loadApp(search) {
     },
     graphOps: 0,
     blits: 0,
+    made: 0,
     createGraphics() {
+      context.made += 1
+      if (context.made === 1) {
+        return {
+          canvas: { style: {} },
+          clear() {},
+          colorMode() {},
+          background() {},
+          noStroke() {},
+          noFill() {},
+          fill() {},
+          rect() {},
+          stroke() {},
+          strokeWeight() {},
+          line() {},
+          ellipse() {},
+          image() {},
+          textAlign() {},
+          textSize() {},
+          text() {},
+          textWidth() { return 0 },
+        }
+      }
+      if (context.made === 2) {
+        return {
+          canvas: { style: {} },
+          clear() { context.graphOps += 1 },
+          colorMode() {},
+          background() {},
+          noStroke() {},
+          noFill() {},
+          fill() {},
+          rect() { context.graphOps += 1 },
+          stroke() {},
+          strokeWeight() {},
+          line() { context.graphOps += 1 },
+          ellipse() { context.graphOps += 1 },
+          image() {},
+          textAlign() {},
+          textSize() {},
+          text() { context.graphOps += 1 },
+          textWidth() { return 0 },
+        }
+      }
       return {
-        clear() { context.graphOps += 1 },
+        canvas: { style: {} },
+        clear() {},
         colorMode() {},
+        background() {},
         noStroke() {},
+        noFill() {},
         fill() {},
-        rect() { context.graphOps += 1 },
+        rect() {},
         stroke() {},
         strokeWeight() {},
-        line() { context.graphOps += 1 },
-        ellipse() { context.graphOps += 1 },
+        line() {},
+        ellipse() {},
+        image() { context.blits += 1 },
         textAlign() {},
         textSize() {},
-        text() { context.graphOps += 1 },
+        text() {},
+        textWidth() { return 0 },
       }
     },
-    image() { context.blits += 1 },
   }
   context.HTMLCanvasElement.prototype = { getContext() { return {} } }
   vm.createContext(context)
@@ -114,6 +164,7 @@ function loadApp(search) {
 const context = loadApp('?ns=3&all=0')
 vm.runInContext('setup()', context)
 const ops = context.graphOps
+const blits = context.blits
 
 assert.equal(
   ops > 0,
@@ -132,9 +183,9 @@ expectata: the mini graph cache is reused without rerendering the arrows and nod
 resultata: the cached mini graph drawing operations changed from ${ops} to ${context.graphOps}`,
 )
 assert.equal(
-  context.blits,
+  context.blits - blits,
   1,
   `replicata: load the app with ?ns=3&all=0, call setup(), then call draw() once
-expectata: the cached mini graph is blitted once onto the main canvas
-resultata: the cached mini graph was blitted ${context.blits} times`,
+expectata: the cached mini graph is blitted once onto the overlay during draw()
+resultata: the cached mini graph was blitted ${context.blits - blits} times during draw()`,
 )
