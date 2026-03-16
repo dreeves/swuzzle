@@ -26,7 +26,7 @@ if (rawall !== '0' && rawall !== '1')
 const allcrush = rawall === '1'
 window.history.replaceState({}, null, swuzurl(ns, allcrush))
 
-const pausems = 1500 // milliseconds to pause between derangements
+const pausems = 1000 // milliseconds to pause between derangements
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
 // Derangements: permutations with no fixed points (every swimmer chases someone else)
 // Crush map: each swimmer chooses a different swimmer to chase; multiple
@@ -34,6 +34,9 @@ const infoh = 26/2 // how many pixels high the info lines at the bottom are
 const derangements = allDerangements(ns)
 const ncrush = allcrush ? crushCount(ns) : derangements.length
 const rainx = 5, rainy = 20, rainw = 422, rainh = 17 // rainbar position/size
+const buttonsz = 38
+const buttgap = 9
+const buttony = rainy + rainh + 47
 let swm = [] // list of swimmers
 let n = 0 // number of derangements drawn so far
 let dline = '' // text line with the distance
@@ -47,6 +50,7 @@ const headr = 6 // radius of the swimmer head dot
 const edgepad = headr + 6
 const simstep = 1
 const simsubsteps = 2
+const simtol = 1e-9
 const coalescepx = 3
 const mingraphsz = 120
 const mingraphpad = 10
@@ -71,29 +75,51 @@ function screen() {
 function instructions(g = screen()) {
   g.stroke('Black'); g.fill('White')
   g.textSize(15)
+  const rw = rainwid()
   const pixline = `(${width}x${height} pixels)`
   const countline = allcrush ?
     `${ns} swimmers, ${ncrush} crush maps` :
     `${ns} swimmers, ${ncrush} derangements`
   g.text('Amorous Swimmers', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
-  g.text(pixline, rainx + rainw - g.textWidth(pixline), rainy + rainh + 15)
+  g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
 
 function swuzurl(n, all) { return `?ns=${n}&all=${all ? 1 : 0}` }
 
+function rainwid() { return max(0, min(rainw, width - 2*rainx)) }
+
+function uiright() { return rainx + rainwid() }
+
+function fwdx() { return max(rainx + buttonsz + buttgap, uiright() - buttonsz) }
+
+function backx() { return fwdx() - buttonsz - buttgap }
+
+function boxat(x, y, s) {
+  return { l: x - s/2, r: x + s/2, t: y - s/2, b: y + s/2 }
+}
+
+function overlap(a, b) {
+  return max(0, min(a.r, b.r) - max(a.l, b.l)) *
+         max(0, min(a.b, b.b) - max(a.t, b.t))
+}
+
+function arrowbox() {
+  return { l: backx(), r: fwdx() + buttonsz, t: buttony, b: buttony + buttonsz }
+}
+
 function rainbar(g = screen()) {
   g.stroke(0, 0, 0.3) // dim gray outline
   g.noFill()
-  g.rect(rainx, rainy, rainw, rainh)
+  g.rect(rainx, rainy, rainwid(), rainh)
 }
 
 // Fill the rainbow bar proportionally to progress (0 to 1)
 function rainfill(frac, g = screen()) {
   g.noStroke()
-  const w = Math.round(rainw * frac)
+  const w = Math.round(rainwid() * frac)
   for (let i = 0; i <= w; i++) {
-    g.fill(blink(i/rainw), 1, 1)
+    g.fill(blink(i/rainwid()), 1, 1)
     g.rect(rainx+i, rainy, 1, rainh)
   }
 }
@@ -228,15 +254,17 @@ function drawArrow(g, a, b, arrowSize = 6) {
 // Pick the corner farthest from all swimmer starting positions,
 // avoiding the title/rainbow bar area at the top left
 function bestCorner(positions) {
-  const gs = 140 // graph area size
+  const gs = mingraphsz + 2*mingraphpad
   const top = rainy + rainh + gs/2 // below the rainbow bar
   const corners = [
     [width - gs/2,  top],           // top-right (below title)
     [gs/2,          height - gs/2], // bottom-left
     [width - gs/2,  height - gs/2], // bottom-right
   ]
+  const buttons = arrowbox()
   return argmin(corners, c =>
-    -Math.min(...positions.map(p => pdist(p, c)))
+    overlap(boxat(c[0], c[1], gs), buttons) * (width + height) -
+    Math.min(...positions.map(p => pdist(p, c)))
   )
 }
 
@@ -297,7 +325,9 @@ function composite() {
 function styleButton(button) {
   button.style('background-color', '#333')
   button.style('color', 'white')
-  button.style('padding', '10px')
+  button.style('padding', '0')
+  button.style('width', `${buttonsz}px`)
+  button.style('height', `${buttonsz}px`)
   button.style('border', 'none')
   button.style('border-radius', '5px')
   button.style('font-size', '18px')
@@ -358,7 +388,7 @@ function advanceswimmers() {
   for (let i = 0; i < simsubsteps; i++) {
     swm = syncstep(swm, ci, simstep)
     traildots(trail)
-    allquiesced = swm.every((p, j) => pdist(p, swm[ci[j]]) <= simstep)
+    allquiesced = swm.every((p, j) => pdist(p, swm[ci[j]]) <= simstep + simtol)
   }
   return allquiesced
 }
@@ -432,7 +462,7 @@ function setup() {
   composite()
 
   const crushBox = createCheckbox('all crush maps', allcrush)
-  crushBox.position(2, 86)
+  crushBox.position(2, buttony + 2)
   crushBox.style('color', 'white')
   crushBox.style('font-size', '14px')
   crushBox.style('user-select', 'none')
@@ -440,13 +470,13 @@ function setup() {
   crushBox.changed(() => rage(swuzurl(ns, crushBox.checked())))
   
   const backButton = createButton('◀️')
-  backButton.position(318, 84)
+  backButton.position(backx(), buttony)
   styleButton(backButton)
   setButtonState(backButton, ns > nsmin)
   backButton.mousePressed(() => rage(swuzurl(ns-1, allcrush)))
 
   const fwdButton = createButton('▶️')
-  fwdButton.position(365, 84)
+  fwdButton.position(fwdx(), buttony)
   styleButton(fwdButton)
   setButtonState(fwdButton, ns < nsmax)
   fwdButton.mousePressed(() => rage(swuzurl(ns+1, allcrush)))
