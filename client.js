@@ -90,7 +90,7 @@ function instructions(g = screen()) {
   const countline = allcrush ?
     `${ns} swimmers, ${ncrush} crush maps` :
     `${ns} swimmers, ${ncrush} derangements`
-  g.text('Amorous Swimmers v1933', 5, 15)
+  g.text('Amorous Swimmers v1934', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
@@ -262,15 +262,59 @@ function drawArrow(g, a, b, arrowSize = 6) {
 
 // Pick the corner farthest from all swimmer starting positions,
 // avoiding the title/rainbow bar area at the top left
+// Search the canvas for the largest empty square below the control row.
 function bestCorner(positions) {
   const gs = mingraphsz + 2*mingraphpad
-  const corners = [
-    [gs/2,          height - gs/2], // bottom-left
-    [width - gs/2,  height - gs/2], // bottom-right
+  const r = gs/2
+  const ctrlb = buttony + buttonsz
+  const step = 8
+  let best = [r, height-r]
+  let bestscore = -Infinity
+  for (let cx = r; cx <= width-r; cx += step) {
+    for (let cy = r; cy <= height-r; cy += step) {
+      if (cy-r < ctrlb) continue
+      const score = spotScore(positions, cx, cy, r)
+      if (score > bestscore) {
+        bestscore = score
+        best = [cx, cy]
+      }
+    }
+  }
+  return best
+}
+
+function pointinpoly(p, poly) {
+  const [x, y] = p
+  let inside = false
+  for (let i = 0, j = poly.length-1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]
+    const [xj, yj] = poly[j]
+    const cross = ((yi > y) !== (yj > y)) &&
+      (x < (xj-xi) * (y-yi) / (yj-yi) + xi)
+    if (cross) inside = !inside
+  }
+  return inside
+}
+
+function sqdistbox(p, cx, cy, r) {
+  const dx = max(Math.abs(p[0]-cx)-r, 0)
+  const dy = max(Math.abs(p[1]-cy)-r, 0)
+  return dx*dx + dy*dy
+}
+
+function boxsamples(cx, cy, r) {
+  return [
+    [cx, cy],
+    [cx-r, cy-r], [cx+r, cy-r], [cx-r, cy+r], [cx+r, cy+r],
+    [cx, cy-r], [cx, cy+r], [cx-r, cy], [cx+r, cy],
   ]
-  return argmin(corners, c =>
-    -Math.min(...positions.map(p => pdist(p, c)))
-  )
+}
+
+function spotScore(positions, cx, cy, r) {
+  const hullhits = boxsamples(cx, cy, r).reduce(
+    (a, p) => a + (pointinpoly(p, positions) ? 1 : 0), 0)
+  const mind2 = min(...positions.map(p => sqdistbox(p, cx, cy, r)))
+  return mind2 - hullhits * width * height
 }
 
 // Draw mini graph in corner

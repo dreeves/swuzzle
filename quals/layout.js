@@ -126,7 +126,7 @@ for (const [w, h] of [[320, 568], [375, 667], [390, 844], [430, 932], [568, 320]
   const { buttons, context } = loadApp('?ns=4&all=0', w, h)
   const s = JSON.parse(
     vm.runInContext(
-      'JSON.stringify({ graphcorner, mingraphsz, mingraphpad, buttonsz, width, buttony, rainy })',
+      'JSON.stringify({ graphcorner, mingraphsz, mingraphpad, buttonsz, width, buttony, rainy, baseswm })',
       context,
     ),
   )
@@ -177,3 +177,22 @@ expectata: the forward button stays on screen
 resultata: the forward button ends at x=${fwd.x + s.buttonsz} on a ${s.width}px-wide screen`,
   )
 }
+
+const tall = loadApp('?ns=4&all=0', 390, 844)
+const tallState = JSON.parse(
+  vm.runInContext(
+    'JSON.stringify({ graphcorner, mingraphsz, mingraphpad, baseswm })',
+    tall.context,
+  ),
+)
+const graphtop = tallState.graphcorner[1] - (tallState.mingraphsz/2 + tallState.mingraphpad)
+const graphbottom = tallState.graphcorner[1] + (tallState.mingraphsz/2 + tallState.mingraphpad)
+const swimmerTop = Math.min(...tallState.baseswm.map(p => p[1]))
+
+assert.equal(
+  graphbottom < swimmerTop,
+  true,
+  `replicata: load the app with ?ns=4&all=0 on a 390x844 screen and call setup()
+expectata: the diagram uses the open strip above the swimmers instead of defaulting to a bottom corner
+resultata: the diagram spanned y=${graphtop}..${graphbottom} while the swimmers started at y>=${swimmerTop}`,
+)
