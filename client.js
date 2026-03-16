@@ -56,9 +56,13 @@ const edgepad = headr + 6
 const simstep = 1
 const simsubsteps = 2
 const coalescepx = 3
+const mingraphsz = 120
+const mingraphpad = 10
+const mingraphr = 40
 let baseswm = []
 let graphcorner = []
 let minipos = []
+let mingraph
 
 // -----------------------------------------------------------------------------
 // Displaying things on the screen besides the actual swimmers
@@ -196,9 +200,9 @@ function genMiniSwimmers(n, centerX, centerY, radius) {
 }
 
 // Draw arrow from point a to point b
-function drawArrow(a, b, arrowSize = 6) {
-  stroke('White')
-  strokeWeight(1.5)
+function drawArrow(g, a, b, arrowSize = 6) {
+  g.stroke('White')
+  g.strokeWeight(1.5)
   
   // Shorten the line so arrow doesn't overlap with nodes
   const angle = Math.atan2(b[1] - a[1], b[0] - a[0])
@@ -207,7 +211,7 @@ function drawArrow(a, b, arrowSize = 6) {
   const endX = b[0] - 8 * cos(angle)
   const endY = b[1] - 8 * sin(angle)
   
-  line(startX, startY, endX, endY)
+  g.line(startX, startY, endX, endY)
   
   // Draw arrowhead
   const x1 = endX - arrowSize * cos(angle - 0.5)
@@ -215,10 +219,10 @@ function drawArrow(a, b, arrowSize = 6) {
   const x2 = endX - arrowSize * cos(angle + 0.5)
   const y2 = endY - arrowSize * sin(angle + 0.5)
   
-  line(endX, endY, x1, y1)
-  line(endX, endY, x2, y2)
+  g.line(endX, endY, x1, y1)
+  g.line(endX, endY, x2, y2)
   
-  strokeWeight(1) // Reset stroke weight
+  g.strokeWeight(1) // Reset stroke weight
 }
 
 // Pick the corner farthest from all swimmer starting positions,
@@ -238,37 +242,9 @@ function bestCorner(positions) {
 
 // Draw mini graph in corner
 function drawMiniGraph() {
-  const graphSize = 120
-  const centerX = graphcorner[0]
-  const centerY = graphcorner[1]
-  const gx = centerX - graphSize/2 - 10
-  const gy = centerY - graphSize/2 - 10
-
-  // Background
-  noStroke()
-  fill(0, 0, 0, 0.7)
-  rect(gx, gy, graphSize + 20, graphSize + 20)
-
-  // Draw arrows
-  for (let i = 0; i < ns; i++) {
-    if (i !== ci[i]) { // Don't draw self-arrows
-      drawArrow(minipos[i], minipos[ci[i]], 4)
-    }
-  }
-  
-  // Draw nodes
-  for (let i = 0; i < ns; i++) {
-    noStroke()
-    fill('White')
-    ellipse(minipos[i][0], minipos[i][1], 12)
-    fill('Black')
-    textAlign(CENTER, CENTER)
-    textSize(10)
-    text(i, minipos[i][0], minipos[i][1])
-  }
-  
-  // Reset text alignment
-  textAlign(LEFT, BASELINE)
+  image(mingraph,
+        graphcorner[0] - mingraphsz/2 - mingraphpad,
+        graphcorner[1] - mingraphsz/2 - mingraphpad)
 }
 
 function traildots() {
@@ -307,10 +283,34 @@ function loadCrushMap() {
   for (let i = 0; i < swm.length; i++) {
     di[i] = pdist(swm[i], swm[ci[i]])
   }
+  cacheMiniGraph()
 }
 
 function syncstep(points, crushes, step) {
   return points.map((p, i) => pairstep(p, points[crushes[i]], step))
+}
+
+function cacheMiniGraph() {
+  mingraph.clear()
+  mingraph.noStroke()
+  mingraph.fill(0, 0, 0, 0.7)
+  mingraph.rect(0, 0, mingraphsz + 2*mingraphpad, mingraphsz + 2*mingraphpad)
+
+  for (let i = 0; i < ns; i++) {
+    if (i !== ci[i]) { // Don't draw self-arrows
+      drawArrow(mingraph, minipos[i], minipos[ci[i]], 4)
+    }
+  }
+
+  for (let i = 0; i < ns; i++) {
+    mingraph.noStroke()
+    mingraph.fill('White')
+    mingraph.ellipse(minipos[i][0], minipos[i][1], 12)
+    mingraph.fill('Black')
+    mingraph.textAlign(CENTER, CENTER)
+    mingraph.textSize(10)
+    mingraph.text(i, minipos[i][0], minipos[i][1])
+  }
 }
 
 function advanceswimmers() {
@@ -422,7 +422,10 @@ function setup() {
 
   baseswm = genswimmers(ns)
   graphcorner = bestCorner(baseswm)
-  minipos = genMiniSwimmers(ns, graphcorner[0], graphcorner[1], 40)
+  minipos = genMiniSwimmers(ns, mingraphsz/2 + mingraphpad,
+                            mingraphsz/2 + mingraphpad, mingraphr)
+  mingraph = createGraphics(mingraphsz + 2*mingraphpad, mingraphsz + 2*mingraphpad)
+  mingraph.colorMode(HSB, 1)
 
   //const y = -.95
   //swm = [coort(-.5, y), coort(.5, y)]

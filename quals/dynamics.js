@@ -50,6 +50,7 @@ function loadApp(search) {
     clear() {},
     background() {},
     line() {},
+    image() {},
     rect() {},
     point() {},
     ellipse() {},
@@ -72,6 +73,22 @@ function loadApp(search) {
         mousePressed() {},
         attribute() {},
         removeAttribute() {},
+      }
+    },
+    createGraphics() {
+      return {
+        clear() {},
+        colorMode() {},
+        noStroke() {},
+        fill() {},
+        rect() {},
+        stroke() {},
+        strokeWeight() {},
+        line() {},
+        ellipse() {},
+        textAlign() {},
+        textSize() {},
+        text() {},
       }
     },
     createCheckbox(label, checked) {

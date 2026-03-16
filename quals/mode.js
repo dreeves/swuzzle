@@ -51,6 +51,7 @@ function loadApp(search) {
     clear() {},
     background() {},
     line() {},
+    image() {},
     rect() {},
     point() {},
     ellipse() {},
@@ -74,6 +75,22 @@ function loadApp(search) {
         mousePressed(fn) { this.onclick = fn },
         attribute(name, value) { this[name] = value },
         removeAttribute(name) { delete this[name] },
+      }
+    },
+    createGraphics() {
+      return {
+        clear() {},
+        colorMode() {},
+        noStroke() {},
+        fill() {},
+        rect() {},
+        stroke() {},
+        strokeWeight() {},
+        line() {},
+        ellipse() {},
+        textAlign() {},
+        textSize() {},
+        text() {},
       }
     },
     checks: [],
