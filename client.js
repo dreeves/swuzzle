@@ -54,6 +54,9 @@ const coalescepx = 3
 const heartframes = 36
 const pulseframes = 18
 const hearthue = blink(1)
+const bloopdur = 0.14
+const bloopf0 = 880
+const bloopgain = 0.045
 const mingraphsz = 120
 const mingraphpad = 10
 const mingraphr = 40
@@ -63,6 +66,7 @@ let minipos = []
 let pulses = []
 let hearts = []
 let hitseen = new Set()
+let bloop = () => {}
 let trail
 let mingraph
 let overlay
@@ -86,7 +90,7 @@ function instructions(g = screen()) {
   const countline = allcrush ?
     `${ns} swimmers, ${ncrush} crush maps` :
     `${ns} swimmers, ${ncrush} derangements`
-  g.text('Amorous Swimmers v1932', 5, 15)
+  g.text('Amorous Swimmers v1933', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
@@ -315,13 +319,41 @@ function spawnhit(i) {
   })
 }
 
+function playbloop(ctx, hits) {
+  const t = ctx.currentTime
+  const f = bloopf0 * 2 ** (-(hits-1)/18)
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(f, t)
+  osc.frequency.exponentialRampToValueAtTime(f * 0.72, t + bloopdur)
+  gain.gain.setValueAtTime(0.0001, t)
+  gain.gain.exponentialRampToValueAtTime(bloopgain, t + 0.015)
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + bloopdur)
+  osc.connect(gain)
+  gain.connect(ctx.destination)
+  osc.start(t)
+  osc.stop(t + bloopdur)
+}
+
+function unlockaudio() {
+  window.onpointerdown = null
+  window.onkeydown = null
+  window.ontouchstart = null
+  const ctx = new (window.AudioContext || window.webkitAudioContext)()
+  bloop = hits => {
+    ctx.resume()
+    playbloop(ctx, hits)
+  }
+}
+
 function updatehits() {
-  range(ns)
-    .filter(i => pdist(swm[i], swm[ci[i]]) < coalescepx && !hitseen.has(i))
-    .forEach(i => {
+  const hits = range(ns).filter(i => pdist(swm[i], swm[ci[i]]) < coalescepx && !hitseen.has(i))
+  hits.forEach(i => {
       spawnhit(i)
       hitseen.add(i)
     })
+  hits.length && bloop(hits.length)
 }
 
 function agefx() {
@@ -563,6 +595,10 @@ function setup() {
   styleButton(fwdButton)
   setButtonState(fwdButton, ns < nsmax)
   fwdButton.mousePressed(() => rage(swuzurl(ns+1, allcrush)))
+
+  window.onpointerdown = unlockaudio
+  window.onkeydown = unlockaudio
+  window.ontouchstart = unlockaudio
 
   //stroke('white')
 }
