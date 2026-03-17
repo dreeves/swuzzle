@@ -68,6 +68,33 @@ function loadApp(search, windowWidth, windowHeight) {
     shuffle(x) { return x },
     frameRate() {},
     randreal(a, b) { return (a + b) / 2 },
+    createInput() {
+      return {
+        position() {},
+        size() {},
+        style() {},
+        attribute() {},
+        input() {},
+        value() {},
+      }
+    },
+    createSlider(_min, _max, value) {
+      return {
+        sliderValue: value,
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+        position(x, y) { this.x = x; this.y = y },
+        size(w, h) { this.w = w; this.h = h },
+        style() {},
+        input(fn) { this.oninput = fn },
+        value(v) {
+          if (arguments.length) this.sliderValue = v
+          return this.sliderValue
+        },
+      }
+    },
     createButton(label) {
       const button = {
         label,
@@ -123,76 +150,70 @@ function loadApp(search, windowWidth, windowHeight) {
 }
 
 for (const [w, h] of [[320, 568], [375, 667], [390, 844], [430, 932], [568, 320]]) {
-  const { buttons, context } = loadApp('?ns=4&all=0', w, h)
+  const { buttons, context } = loadApp('?ns=4&self=0&pursue=0&pursuers=0', w, h)
   const s = JSON.parse(
     vm.runInContext(
-      'JSON.stringify({ graphcorner, mingraphsz, mingraphpad, buttonsz, width, buttony, rainy, baseswm })',
+      'JSON.stringify({ graphcorner, graphspan: graphspan(), buttonsz, width, buttony, rainy, baseswm })',
       context,
     ),
   )
-  const back = buttons.find(b => b.label === '◀️')
-  const fwd = buttons.find(b => b.label === '▶️')
   const graph = {
-    l: s.graphcorner[0] - (s.mingraphsz/2 + s.mingraphpad),
-    r: s.graphcorner[0] + (s.mingraphsz/2 + s.mingraphpad),
-    t: s.graphcorner[1] - (s.mingraphsz/2 + s.mingraphpad),
-    b: s.graphcorner[1] + (s.mingraphsz/2 + s.mingraphpad),
+    l: s.graphcorner[0] - s.graphspan/2,
+    r: s.graphcorner[0] + s.graphspan/2,
+    t: s.graphcorner[1] - s.graphspan/2,
+    b: s.graphcorner[1] + s.graphspan/2,
   }
-  const arrows = {
-    l: back.x,
-    r: fwd.x + s.buttonsz,
-    t: back.y,
-    b: back.y + s.buttonsz,
-  }
+  const buttonOverlap = buttons.reduce((a, b) => {
+    return a + Math.max(0, Math.min(graph.r, b.x + s.buttonsz) - Math.max(graph.l, b.x)) *
+      Math.max(0, Math.min(graph.b, b.y + s.buttonsz) - Math.max(graph.t, b.y))
+  }, 0)
   const controls = {
     l: 0,
     r: s.width,
     t: s.rainy,
-    b: s.buttony + s.buttonsz,
+    b: s.buttony + s.buttonsz + 66,
   }
-  const overlap = Math.max(0, Math.min(graph.r, arrows.r) - Math.max(graph.l, arrows.l)) *
-                  Math.max(0, Math.min(graph.b, arrows.b) - Math.max(graph.t, arrows.t))
   const cover = Math.max(0, Math.min(graph.r, controls.r) - Math.max(graph.l, controls.l)) *
                 Math.max(0, Math.min(graph.b, controls.b) - Math.max(graph.t, controls.t))
 
   assert.equal(
-    overlap,
+    buttonOverlap,
     0,
-    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and call setup()
-expectata: the corner diagram does not overlap the arrow controls
-resultata: the overlap area is ${overlap}`,
+    `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0 on a ${w}x${h} screen and call setup()
+expectata: the corner diagram does not overlap any speed button
+resultata: the overlap area is ${buttonOverlap}`,
   )
   assert.equal(
     cover,
     0,
-    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and call setup()
+    `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0 on a ${w}x${h} screen and call setup()
 expectata: the corner diagram stays completely below or away from the whole control row
 resultata: the overlap area with the control row is ${cover}`,
   )
   assert.equal(
-    fwd.x + s.buttonsz <= s.width,
+    Math.max(...buttons.map(b => b.x + s.buttonsz)) <= s.width,
     true,
-    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and call setup()
-expectata: the forward button stays on screen
-resultata: the forward button ends at x=${fwd.x + s.buttonsz} on a ${s.width}px-wide screen`,
+    `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0 on a ${w}x${h} screen and call setup()
+expectata: the speed buttons stay on screen
+resultata: the rightmost button ends at x=${Math.max(...buttons.map(b => b.x + s.buttonsz))} on a ${s.width}px-wide screen`,
   )
 }
 
-const tall = loadApp('?ns=4&all=0', 390, 844)
+const tall = loadApp('?ns=4&self=0&pursue=0&pursuers=0', 390, 844)
 const tallState = JSON.parse(
   vm.runInContext(
-    'JSON.stringify({ graphcorner, mingraphsz, mingraphpad, baseswm })',
+    'JSON.stringify({ graphcorner, graphspan: graphspan(), baseswm })',
     tall.context,
   ),
 )
-const graphtop = tallState.graphcorner[1] - (tallState.mingraphsz/2 + tallState.mingraphpad)
-const graphbottom = tallState.graphcorner[1] + (tallState.mingraphsz/2 + tallState.mingraphpad)
+const graphtop = tallState.graphcorner[1] - tallState.graphspan/2
+const graphbottom = tallState.graphcorner[1] + tallState.graphspan/2
 const swimmerTop = Math.min(...tallState.baseswm.map(p => p[1]))
 
 assert.equal(
   graphbottom < swimmerTop,
   true,
-  `replicata: load the app with ?ns=4&all=0 on a 390x844 screen and call setup()
+  `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0 on a 390x844 screen and call setup()
 expectata: the diagram uses the open strip above the swimmers instead of defaulting to a bottom corner
 resultata: the diagram spanned y=${graphtop}..${graphbottom} while the swimmers started at y>=${swimmerTop}`,
 )

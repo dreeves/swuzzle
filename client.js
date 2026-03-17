@@ -18,13 +18,37 @@ const nsmin = 2
 const nsmax = 9
 const rawns = getQueryParam('ns', `${nsmin}`)
 let ns = Number(rawns)
-const rawall = getQueryParam('all', '0')
+const rawall = getQueryParam('all')
+const rawself = getQueryParam('self')
+const rawpursue = getQueryParam('pursue')
+const rawpursuers = getQueryParam('pursuers')
+const rawbias = getQueryParam('bias')
+const biasmin = -6
+const biasmax = 6
+const biasstep = 0.1
 if (!/^\d+$/.test(rawns) || ns < nsmin || ns > nsmax)
   throw new Error(`Expected ns query parameter to be an integer from ${nsmin} to ${nsmax}; got ${rawns}`)
-if (rawall !== '0' && rawall !== '1')
+function boolparam(name, raw, def) {
+  if (raw === false) return def === '1'
+  if (raw !== '0' && raw !== '1')
+    throw new Error(`Expected ${name} query parameter to be 0 or 1; got ${raw}`)
+  return raw === '1'
+}
+function numparam(name, raw, def, lo, hi) {
+  const v = raw === false ? def : Number(raw)
+  if (!Number.isFinite(v) || v < lo || v > hi)
+    throw new Error(`Expected ${name} query parameter to be a number from ${lo} to ${hi}; got ${raw}`)
+  return v
+}
+const legacyall = rawself === false && rawpursue === false &&
+                  rawpursuers === false && rawall !== false
+let selfPursuit = boolparam('self', rawself, '0')
+let pursueMany = boolparam('pursue', rawpursue, '0')
+let manyPursuers = boolparam('pursuers', rawpursuers, legacyall ? rawall : '0')
+let pursuitBias = numparam('bias', rawbias, 0, biasmin, biasmax)
+if (rawall !== false && rawall !== '0' && rawall !== '1')
   throw new Error(`Expected all query parameter to be 0 or 1; got ${rawall}`)
-let allcrush = rawall === '1'
-window.history.replaceState({}, null, swuzurl(ns, allcrush))
+window.history.replaceState({}, null, swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias))
 
 let pausems = 250 // milliseconds to pause between derangements / crushmaps
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
@@ -32,17 +56,18 @@ const infoh = 26/2 // how many pixels high the info lines at the bottom are
 // Crushmap: each swimmer chooses a different swimmer to chase; multiple
 // swimmers may share a crush.
 let derangements = []
-let ncrush = 0
+let family = ''
+let ncrush = 0n
 const rainx = 5, rainy = 20, rainw = 422, rainh = 17 // rainbar position/size
 const buttonsz = 38
 const buttgap = 9
 const buttony = rainy + rainh + 47
 let swm = [] // list of swimmers
-let n = 0 // number of derangements drawn so far
+let n = 0n // number of derangements drawn so far
 let dline = '' // text line with the distance
 let xyline = '' // x and y distances
 let crushline = '' // text line with crush relationships
-let ci = [] // indexes of crushes
+let crushes = []
 let di = [] // initial distances from crushes
 let si = [] // state of each swimmer (hot or cold)
 let pauseframes = 0 // countdown for pause between derangements
@@ -63,6 +88,14 @@ const hearthue = blink(1)
 const bloopdur = 0.14
 const bloopf0 = 880
 const bloopgain = 0.12
+const speedspecs = [
+  { sp: 'step', em: '⏸️', title: 'Pause/Step' },
+  { sp: '1000', em: '🐌', title: 'Snail' },
+  { sp: '500',  em: '🐢', title: 'Turtle' },
+  { sp: '250',  em: '🐇', title: 'Rabbit' },
+  { sp: '100',  em: '🚀', title: 'Rocket' },
+  { sp: '0',    em: '⚡️', title: 'Lightning' },
+]
 const mingraphsz = 120
 const mingraphpad = 10
 const mingraphr = 40
@@ -78,10 +111,86 @@ let trail
 let mingraph
 let overlay
 let nsInput
+let selfBox
+let pursueBox
+let pursuersBox
+let biasSlider
+
+const familylabel = {
+  derangements: 'derangements',
+  crushmaps: 'crush maps',
+  permutations: 'crush maps',
+  endofunctions: 'crush maps',
+  multicrushmaps: 'crush maps',
+  multicrushselfmaps: 'crush maps',
+}
+
+function modeopts() {
+  return { selfPursuit, pursueMany, manyPursuers }
+}
+
+function modencrush() { return Number(ncrush) }
+
+function currentmode() { return crushFamily(modeopts()) }
+
+function updatemodeboxes() {
+  if (!pursueBox) return
+  pursueBox.style('opacity', manyPursuers ? '1' : '0.45')
+}
+
+function setbias(newbias) {
+  pursuitBias = newbias
+  if (biasSlider) biasSlider.value(pursuitBias)
+  window.history.replaceState({}, null, swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias))
+  resetscene()
+}
+
+function targetpoint(points, ids, swimmer) {
+  if (ids.length === 0)
+    throw new Error('Expected every swimmer to have a nonempty crush set')
+  const pursuer = points[swimmer]
+  const pts = ids.map(j => points[j])
+  const ds = pts.map(p => pdist(pursuer, p))
+  const mean = ds.reduce((a, d) => a + d, 0) / ds.length
+  const scale = max(max(...ds) - min(...ds), 1e-9)
+  const ws = ds.map(d => Math.exp(pursuitBias * (d - mean) / scale))
+  const wsum = ws.reduce((a, w) => a + w, 0)
+  return pts.reduce(
+    (a, p, i) => [a[0] + ws[i] * p[0] / wsum, a[1] + ws[i] * p[1] / wsum],
+    [0, 0],
+  )
+}
+
+function targetpoints(points, crushmap) {
+  return crushmap.map((ids, i) => targetpoint(points, Array.isArray(ids) ? ids : [ids], i))
+}
+
+function activederangement(rank) {
+  return derangements[Number(rank)].map(j => [j])
+}
+
+function controlbot() { return buttony + buttonsz + 66 }
+
+function graphspan() {
+  return min(mingraphsz + 2*mingraphpad, max(height - controlbot() - 8, 72))
+}
+
+function speedbtnswidth() {
+  return speedspecs.length * buttonsz + (speedspecs.length - 1) * 4
+}
+
+function biasx() { return rainx }
+
+function biasy() { return buttony + 66 }
+
+function biaswid() { return max(56, rainwid() - speedbtnswidth() - 12) }
 
 function recalcmode() {
-  derangements = allDerangements(ns)
-  ncrush = allcrush ? crushCount(ns) : derangements.length
+  family = currentmode()
+  derangements = family === 'derangements' ? allDerangements(ns) : []
+  ncrush = family === 'derangements' ?
+    BigInt(derangements.length) :
+    crushMapCount(ns, modeopts())
 }
 
 recalcmode()
@@ -102,15 +211,15 @@ function instructions(g = screen()) {
   g.textSize(15)
   const rw = rainwid()
   const pixline = `(${width}x${height} pixels)`
-  const countline = allcrush ?
-    `${ns} swimmers, ${ncrush} crushmaps` :
-    `${ns} swimmers, ${ncrush} derangements`
+  const countline = `${ns} swimmers, ${ncrush.toString()} ${familylabel[family]}`
   g.text('Amorous Swimmers', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
 
-function swuzurl(n, all) { return `?ns=${n}&all=${all ? 1 : 0}` }
+function swuzurl(n, self, pursue, pursuers, bias) {
+  return `?ns=${n}&self=${self ? 1 : 0}&pursue=${pursue ? 1 : 0}&pursuers=${pursuers ? 1 : 0}&bias=${Number(bias.toFixed(1))}`
+}
 
 function rainwid() { return max(0, min(rainw, width - 2*rainx)) }
 
@@ -123,16 +232,20 @@ function rainbar(g = screen()) {
 }
 
 function remsum() {
-  return swm.reduce((a, p, j) => a + max(pdist(p, swm[ci[j]]) - simstep, 0), 0)
+  const tg = targetpoints(swm, crushes)
+  return swm.reduce((a, p, j) => a + max(pdist(p, tg[j]) - simstep, 0), 0)
 }
 
 function initrem() {
   return di.reduce((a, d) => a + max(d - simstep, 0), 0)
 }
 
-function curprog() { return 1 - remsum() / initrem() }
+function curprog() {
+  const init = initrem()
+  return init === 0 ? 1 : 1 - remsum() / init
+}
 
-function progfrac() { return (n + curprog()) / ncrush }
+function progfrac() { return (Number(n) + curprog()) / modencrush() }
 
 // Fill the rainbow bar proportionally to progress (0 to 1)
 function rainfill(frac, g = screen()) {
@@ -144,8 +257,23 @@ function rainfill(frac, g = screen()) {
   }
 }
 
+function biaslegend(g = screen()) {
+  const left = 'near'
+  const mid = 'centroid'
+  const right = 'far'
+  const y = biasy() + 26
+  const x = biasx()
+  const w = biaswid()
+  g.noStroke()
+  g.fill(0, 0, 0.75)
+  g.textSize(12)
+  g.text(left, x, y)
+  g.text(mid, x + w/2 - g.textWidth(mid)/2, y)
+  g.text(right, x + w - g.textWidth(right), y)
+}
+
 function infoup() {
-  crushline = `Crushes: ${ci.map((crush, swimmer) => `${swimmer}→${crush}`).join(', ')}`
+  crushline = `Crushes: ${crushes.map((ids, swimmer) => `${swimmer}→{${ids.join(',')}}`).join(', ')}`
   
   textSize(15)
   const crushw = textWidth(crushline)+3
@@ -275,9 +403,9 @@ function drawArrow(g, a, b, arrowSize = 6) {
 // avoiding the title/rainbow bar area at the top left
 // Search the canvas for the largest empty square below the control row.
 function bestCorner(positions) {
-  const gs = mingraphsz + 2*mingraphpad
+  const gs = graphspan()
   const r = gs/2
-  const ctrlb = buttony + buttonsz
+  const ctrlb = controlbot()
   const step = 8
   let best = [r, height-r]
   let bestscore = -Infinity
@@ -330,9 +458,8 @@ function spotScore(positions, cx, cy, r) {
 
 // Draw mini graph in corner
 function drawMiniGraph(g) {
-  g.image(mingraph,
-          graphcorner[0] - mingraphsz/2 - mingraphpad,
-          graphcorner[1] - mingraphsz/2 - mingraphpad)
+  const gs = graphspan()
+  g.image(mingraph, graphcorner[0] - gs/2, graphcorner[1] - gs/2, gs, gs)
 }
 
 function swmgroups() {
@@ -345,8 +472,10 @@ function swmgroups() {
 }
 
 function traildots(g = screen()) {
+  const tg = targetpoints(swm, crushes)
   for (let i = 0; i < swm.length; i++) {
-    g.fill(blink(1 - pdist(swm[i], swm[ci[i]]) / di[i]), 1,1)
+    const frac = di[i] === 0 ? 1 : 1 - pdist(swm[i], tg[i]) / di[i]
+    g.fill(blink(frac), 1,1)
     g.ellipse(swm[i][0], swm[i][1], 2)
   }
 }
@@ -357,7 +486,7 @@ function groupbox(g) {
 }
 
 function spawnhit(i) {
-  const p = midpoint(swm[i], swm[ci[i]])
+  const p = midpoint(swm[i], targetpoint(swm, crushes[i], i))
   const a = i / ns * TAU + TAU/8
   const ox = cos(a)
   const oy = sin(a)
@@ -398,7 +527,8 @@ function bloop(hits) {
 }
 
 function updatehits() {
-  const hits = range(ns).filter(i => pdist(swm[i], swm[ci[i]]) < coalescepx && !hitseen.has(i))
+  const tg = targetpoints(swm, crushes)
+  const hits = range(ns).filter(i => pdist(swm[i], tg[i]) < coalescepx && !hitseen.has(i))
   hits.forEach(i => {
       spawnhit(i)
       hitseen.add(i)
@@ -531,17 +661,18 @@ function styleButton(button) {
 }
 
 function loadCrushMap() {
-  ci = allcrush ? nthCrush(ns, n) : derangements[n]
+  crushes = family === 'derangements' ? activederangement(n) : nthCrushMap(ns, n, modeopts())
   swm = baseswm.map(([x, y]) => [x, y])
+  const tg = targetpoints(swm, crushes)
   for (let i = 0; i < swm.length; i++) {
-    di[i] = pdist(swm[i], swm[ci[i]])
+    di[i] = pdist(swm[i], tg[i])
   }
   hitseen = new Set()
   cacheMiniGraph()
 }
 
 function resetscene() {
-  n = 0
+  n = 0n
   pauseframes = 0
   coalesced = false
   pulses = []
@@ -559,22 +690,27 @@ function resetscene() {
   instructions(trail)
   rainbar(trail)
   rainfill(progfrac(), trail)
+  biaslegend(trail)
   drawoverlay(swmgroups())
   composite()
   if (nsInput) nsInput.value(Math.floor(ns))
   window.loop?.()
 }
 
-function setmode(newns, newallcrush) {
+function setmode(newns, newself, newpursue, newpursuers) {
   ns = newns
-  allcrush = newallcrush
+  selfPursuit = newself
+  pursueMany = newpursue
+  manyPursuers = newpursuers
   recalcmode()
-  rage(swuzurl(ns, allcrush), false)
+  updatemodeboxes()
+  rage(swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias), false)
   resetscene()
 }
 
 function syncstep(points, crushes, step) {
-  return points.map((p, i) => pairstep(p, points[crushes[i]], step))
+  const tg = targetpoints(points, crushes)
+  return points.map((p, i) => pairstep(p, tg[i], step))
 }
 
 function cacheMiniGraph() {
@@ -584,9 +720,7 @@ function cacheMiniGraph() {
   mingraph.rect(0, 0, mingraphsz + 2*mingraphpad, mingraphsz + 2*mingraphpad)
 
   for (let i = 0; i < ns; i++) {
-    if (i !== ci[i]) { // Don't draw self-arrows
-      drawArrow(mingraph, minipos[i], minipos[ci[i]], 4)
-    }
+    crushes[i].filter(j => j !== i).forEach(j => drawArrow(mingraph, minipos[i], minipos[j], 4))
   }
 
   for (let i = 0; i < ns; i++) {
@@ -603,9 +737,10 @@ function cacheMiniGraph() {
 function advanceswimmers() {
   let allquiesced = false
   for (let i = 0; i < simsubsteps; i++) {
-    swm = syncstep(swm, ci, simstep)
+    swm = syncstep(swm, crushes, simstep)
     traildots(trail)
-    allquiesced = swm.every((p, j) => pdist(p, swm[ci[j]]) < simstep)
+    const tg = targetpoints(swm, crushes)
+    allquiesced = swm.every((p, j) => pdist(p, tg[j]) < simstep)
   }
   return allquiesced
 }
@@ -634,7 +769,7 @@ function draw() {
       return
     }
     coalesced = false
-    n += 1
+    n += 1n
     if (n >= ncrush) {
       overlay.clear()
       composite()
@@ -642,7 +777,6 @@ function draw() {
       return
     }
     loadCrushMap()
-    console.log(ci)
   } else {
     if (advanceswimmers()) {
       coalesced = true
@@ -699,47 +833,56 @@ function setup() {
   nsInput.input(() => {
     let v = parseInt(nsInput.value())
     if (v >= nsmin && v <= nsmax && v !== ns) {
-      setmode(v, allcrush)
+      setmode(v, selfPursuit, pursueMany, manyPursuers)
     }
   })
   px += 58
 
-  const crushBox = createCheckbox('all crushmaps', allcrush)
-  crushBox.position(px, buttony)
-  crushBox.style('color', 'white')
-  crushBox.style('font-family', 'sans-serif')
-  crushBox.style('font-size', '14px')
-  crushBox.style('user-select', 'none')
-  crushBox.style('accent-color', '#333')
-  crushBox.changed(() => {
-    setmode(ns, crushBox.checked())
-  })
+  function styleCheckbox(box) {
+    box.style('color', 'white')
+    box.style('font-family', 'sans-serif')
+    box.style('font-size', '14px')
+    box.style('user-select', 'none')
+    box.style('accent-color', '#333')
+  }
+
+  selfBox = createCheckbox('self-pursuit', selfPursuit)
+  selfBox.position(px, buttony)
+  styleCheckbox(selfBox)
+  selfBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked()))
+
+  pursueBox = createCheckbox('pursue>1', pursueMany)
+  pursueBox.position(px, buttony + 20)
+  styleCheckbox(pursueBox)
+  pursueBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked()))
+
+  pursuersBox = createCheckbox('pursuers>1', manyPursuers)
+  pursuersBox.position(px, buttony + 40)
+  styleCheckbox(pursuersBox)
+  pursuersBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked()))
+  updatemodeboxes()
   
   const bloopBox = createCheckbox('bloops', playBloops)
-  bloopBox.position(px, buttony + 20)
-  bloopBox.style('color', 'white')
-  bloopBox.style('font-family', 'sans-serif')
-  bloopBox.style('font-size', '14px')
-  bloopBox.style('user-select', 'none')
-  bloopBox.style('accent-color', '#333')
+  bloopBox.position(px + 115, buttony + 40)
+  styleCheckbox(bloopBox)
   bloopBox.changed(() => {
     playBloops = bloopBox.checked()
   })
 
-  px += 135 // no longer used for buttons directly
+  px += 225 // no longer used for buttons directly
   
-  const speeds = [
-    { sp: 'step', em: '⏸️', title: 'Pause/Step' },
-    { sp: '1000', em: '🐌', title: 'Snail' },
-    { sp: '500',  em: '🐢', title: 'Turtle' },
-    { sp: '250',  em: '🐇', title: 'Rabbit' },
-    { sp: '100',  em: '🚀', title: 'Rocket' },
-    { sp: '0',    em: '⚡️', title: 'Lightning' },
-  ]
-  const btnswidth = speeds.length * buttonsz + (speeds.length - 1) * 4
+  const btnswidth = speedbtnswidth()
   const btnpx = rainx + rainwid() - btnswidth
+  const biasw = biaswid()
+
+  biasSlider = createSlider(biasmin, biasmax, pursuitBias, biasstep)
+  biasSlider.position(biasx(), biasy())
+  biasSlider.size(biasw, 16)
+  biasSlider.style('accent-color', '#20B2AA')
+  biasSlider.style('cursor', 'pointer')
+  biasSlider.input(() => setbias(Number(biasSlider.value())))
   
-  speeds.forEach((s, idx) => {
+  speedspecs.forEach((s, idx) => {
     let b = createButton(s.em)
     b.position(btnpx + idx * (buttonsz + 4), buttony)
     styleButton(b)

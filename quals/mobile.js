@@ -67,6 +67,29 @@ function loadApp(search, windowWidth, windowHeight) {
     shuffle(x) { return x },
     frameRate() {},
     randreal(a, b) { return (a + b) / 2 },
+    createInput() {
+      return {
+        position() {},
+        size() {},
+        style() {},
+        attribute() {},
+        input() {},
+        value() {},
+      }
+    },
+    createSlider(_min, _max, value) {
+      return {
+        sliderValue: value,
+        position() {},
+        size() {},
+        style() {},
+        input(fn) { this.oninput = fn },
+        value(v) {
+          if (arguments.length) this.sliderValue = v
+          return this.sliderValue
+        },
+      }
+    },
     createButton() {
       return {
         position() {},
@@ -119,12 +142,12 @@ function loadApp(search, windowWidth, windowHeight) {
 
 function state(context) {
   return JSON.parse(
-    vm.runInContext('JSON.stringify({ n, ncrush })', context),
+    vm.runInContext('JSON.stringify({ n: n.toString(), ncrush: ncrush.toString() })', context),
   )
 }
 
 for (const [w, h] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
-  const context = loadApp('?ns=4&all=0', w, h)
+  const context = loadApp('?ns=4&self=0&pursue=0&pursuers=0', w, h)
 
   for (let i = 0; i < 5000 && !context.stopped; i++) {
     vm.runInContext('draw()', context)
@@ -134,14 +157,14 @@ for (const [w, h] of [[320, 568], [375, 667], [390, 844], [430, 932]]) {
   assert.equal(
     context.stopped,
     true,
-    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and keep calling draw()
+    `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0 on a ${w}x${h} screen and keep calling draw()
 expectata: the run eventually completes instead of getting stuck on a near-1-pixel orbit
 resultata: stopped is ${context.stopped} after reaching n=${s.n} of ${s.ncrush}`,
   )
   assert.equal(
     s.n,
     s.ncrush,
-    `replicata: load the app with ?ns=4&all=0 on a ${w}x${h} screen and keep calling draw()
+    `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0 on a ${w}x${h} screen and keep calling draw()
 expectata: all 9 derangements eventually complete
 resultata: n is ${s.n} and ncrush is ${s.ncrush}`,
   )

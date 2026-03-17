@@ -124,6 +124,29 @@ function loadApp(search) {
     shuffle(x) { return x },
     frameRate() {},
     randreal(a, b) { return (a + b) / 2 },
+    createInput() {
+      return {
+        position() {},
+        size() {},
+        style() {},
+        attribute() {},
+        input() {},
+        value() {},
+      }
+    },
+    createSlider(_min, _max, value) {
+      return {
+        sliderValue: value,
+        position() {},
+        size() {},
+        style() {},
+        input(fn) { this.oninput = fn },
+        value(v) {
+          if (arguments.length) this.sliderValue = v
+          return this.sliderValue
+        },
+      }
+    },
     createButton() {
       const button = {
         position() {},

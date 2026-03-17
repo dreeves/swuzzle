@@ -18,6 +18,21 @@ resultata: the count is ${got}`,
   )
 }
 
+assert.equal(
+  crushMapCount(3, { selfPursuit: false, pursueMany: true, manyPursuers: false }).toString(),
+  '2',
+  `replicata: call crushMapCount(3, { selfPursuit: false, pursueMany: true, manyPursuers: false })
+expectata: allowing multiple crushes changes nothing when multiple pursuers are forbidden, so the count stays at the derangement count 2
+resultata: the count is ${crushMapCount(3, { selfPursuit: false, pursueMany: true, manyPursuers: false })}`,
+)
+assert.equal(
+  crushMapCount(3, { selfPursuit: true, pursueMany: true, manyPursuers: true }).toString(),
+  '343',
+  `replicata: call crushMapCount(3, { selfPursuit: true, pursueMany: true, manyPursuers: true })
+expectata: the all-subsets family count is (2^3-1)^3 = 343
+resultata: the count is ${crushMapCount(3, { selfPursuit: true, pursueMany: true, manyPursuers: true })}`,
+)
+
 const crushes3 = range(crushCount(3)).map(i => nthCrush(3, i))
 const uniq3 = new Set(crushes3.map(c => JSON.stringify(c)))
 
@@ -43,4 +58,12 @@ assert.equal(
   `replicata: enumerate nthCrush(3, i) for all valid i
 expectata: no swimmer ever crushes on itself
 resultata: at least one crush map had a self-crush`,
+)
+
+assert.deepEqual(
+  nthCrushMap(3, 0n, { selfPursuit: true, pursueMany: true, manyPursuers: true }),
+  [[0], [0], [0]],
+  `replicata: call nthCrushMap(3, 0n, { selfPursuit: true, pursueMany: true, manyPursuers: true })
+expectata: the first all-subsets crush map gives every swimmer the singleton crush set {0}
+resultata: the crush map is ${JSON.stringify(nthCrushMap(3, 0n, { selfPursuit: true, pursueMany: true, manyPursuers: true }))}`,
 )

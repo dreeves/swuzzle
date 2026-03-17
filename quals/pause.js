@@ -67,6 +67,29 @@ function loadApp(search) {
     shuffle(x) { return x },
     frameRate() {},
     randreal(a, b) { return (a + b) / 2 },
+    createInput() {
+      return {
+        position() {},
+        size() {},
+        style() {},
+        attribute() {},
+        input() {},
+        value() {},
+      }
+    },
+    createSlider(_min, _max, value) {
+      return {
+        sliderValue: value,
+        position() {},
+        size() {},
+        style() {},
+        input(fn) { this.oninput = fn },
+        value(v) {
+          if (arguments.length) this.sliderValue = v
+          return this.sliderValue
+        },
+      }
+    },
     createButton(label) {
       return {
         label,
@@ -121,7 +144,7 @@ function loadApp(search) {
 function state(context) {
   return JSON.parse(
     vm.runInContext(
-      'JSON.stringify({ n, pauseframes, ci: ci.slice() })',
+      'JSON.stringify({ n: n.toString(), pauseframes, crushes })',
       context,
     ),
   )
@@ -143,28 +166,28 @@ function spin(context, pred, limit, label) {
   assert.fail(label)
 }
 
-const context = loadApp('?ns=2')
+const context = loadApp('?ns=2&self=0&pursue=0&pursuers=0')
 setup(context)
 
 let s = state(context)
 assert.equal(
   s.n,
-  0,
-  `replicata: load the app with ?ns=2 and call setup()
+  '0',
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and call setup()
 expectata: the first real derangement is active and zero derangements are yet completed, so n is 0
 resultata: n is ${s.n}`,
 )
 assert.deepEqual(
-  s.ci,
-  [1, 0],
-  `replicata: load the app with ?ns=2 and call setup()
-expectata: the active crush mapping is the only derangement [1,0]
-resultata: the active crush mapping is [${s.ci.join(',')}]`,
+  s.crushes,
+  [[1], [0]],
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and call setup()
+expectata: the active crush mapping is the only derangement [[1],[0]]
+resultata: the active crush mapping is ${JSON.stringify(s.crushes)}`,
 )
 assert.equal(
   s.pauseframes,
   0,
-  `replicata: load the app with ?ns=2 and call setup()
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and call setup()
 expectata: there is no fake initial pause before swimmers move
 resultata: pauseframes is ${s.pauseframes}`,
 )
@@ -174,7 +197,7 @@ s = state(context)
 assert.equal(
   s.pauseframes,
   0,
-  `replicata: load the app with ?ns=2, call setup(), then call draw() once
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0, call setup(), then call draw() once
 expectata: swimmers have started moving and are not yet in a pause
 resultata: pauseframes is ${s.pauseframes}`,
 )
@@ -183,13 +206,13 @@ spin(
   context,
   () => state(context).pauseframes > 0,
   1000,
-  'replicata: load the app with ?ns=2 and keep calling draw()\nexpectata: the lone derangement eventually reaches its pause state\nresultata: no pause state was reached within 1000 frames',
+  'replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and keep calling draw()\nexpectata: the lone derangement eventually reaches its pause state\nresultata: no pause state was reached within 1000 frames',
 )
 s = state(context)
 assert.equal(
   context.stopped,
   false,
-  `replicata: load the app with ?ns=2 and advance until the derangement first pauses
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and advance until the derangement first pauses
 expectata: the app is still running during the final pause
 resultata: stopped is ${context.stopped}`,
 )
@@ -199,14 +222,14 @@ for (let i = 0; i < s.pauseframes - 1; i++) draw(context)
 assert.equal(
   context.clears,
   clears,
-  `replicata: load the app with ?ns=2 and advance to one frame before the end of the final pause
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and advance to one frame before the end of the final pause
 expectata: the heads are still paused and the overlay has not been cleared yet
 resultata: clear() was called ${context.clears - clears} additional times`,
 )
 assert.equal(
   context.stopped,
   false,
-  `replicata: load the app with ?ns=2 and advance to one frame before the end of the final pause
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and advance to one frame before the end of the final pause
 expectata: the app is still running
 resultata: stopped is ${context.stopped}`,
 )
@@ -215,14 +238,14 @@ draw(context)
 assert.equal(
   context.stopped,
   true,
-  `replicata: load the app with ?ns=2 and advance through the full final pause
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and advance through the full final pause
 expectata: the app stops when the pause expires
 resultata: stopped is ${context.stopped}`,
 )
 assert.equal(
   context.clears > clears,
   true,
-  `replicata: load the app with ?ns=2 and advance through the full final pause
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and advance through the full final pause
 expectata: the final frame clears the overlay so the white head disappears
 resultata: clear() was called ${context.clears - clears} additional times`,
 )

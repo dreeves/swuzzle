@@ -67,6 +67,29 @@ function loadApp(search) {
     shuffle(x) { return x },
     frameRate() {},
     randreal(a, b) { return (a + b) / 2 },
+    createInput() {
+      return {
+        position() {},
+        size() {},
+        style() {},
+        attribute() {},
+        input() {},
+        value() {},
+      }
+    },
+    createSlider(_min, _max, value) {
+      return {
+        sliderValue: value,
+        position() {},
+        size() {},
+        style() {},
+        input(fn) { this.oninput = fn },
+        value(v) {
+          if (arguments.length) this.sliderValue = v
+          return this.sliderValue
+        },
+      }
+    },
     createButton() {
       return {
         position() {},
@@ -116,12 +139,12 @@ function loadApp(search) {
   return context
 }
 
-const context = loadApp('?ns=4&all=0')
+const context = loadApp('?ns=4&self=0&pursue=0&pursuers=0')
 
 assert.equal(
   vm.runInContext('progfrac()', context),
   0,
-  `replicata: load the app with ?ns=4&all=0 and call setup()
+  `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0 and call setup()
 expectata: the first derangement starts with zero completed progress
 resultata: progfrac() is ${vm.runInContext('progfrac()', context)}`,
 )
@@ -130,17 +153,17 @@ vm.runInContext('draw()', context)
 assert.equal(
   vm.runInContext('progfrac() > 0', context),
   true,
-  `replicata: load the app with ?ns=4&all=0, call setup(), then call draw() once
+  `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0, call setup(), then call draw() once
 expectata: the rainbar updates in real time during the first derangement
 resultata: progfrac() is ${vm.runInContext('progfrac()', context)}`,
 )
 
-vm.runInContext('n = ncrush - 1', context)
+vm.runInContext('n = ncrush - 1n', context)
 vm.runInContext('swm = swm.map(() => [0, 0])', context)
 assert.equal(
   vm.runInContext('progfrac()', context),
   1,
-  `replicata: load the app with ?ns=4&all=0 and set n to the last active derangement index
+  `replicata: load the app with ?ns=4&self=0&pursue=0&pursuers=0 and set n to the last active derangement index
 expectata: the rainbar reaches the end on the last derangement
 resultata: progfrac() is ${vm.runInContext('progfrac()', context)}`,
 )

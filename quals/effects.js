@@ -67,6 +67,29 @@ function loadApp(search) {
     shuffle(x) { return x },
     frameRate() {},
     randreal(a, b) { return (a + b) / 2 },
+    createInput() {
+      return {
+        position() {},
+        size() {},
+        style() {},
+        attribute() {},
+        input() {},
+        value() {},
+      }
+    },
+    createSlider(_min, _max, value) {
+      return {
+        sliderValue: value,
+        position() {},
+        size() {},
+        style() {},
+        input(fn) { this.oninput = fn },
+        value(v) {
+          if (arguments.length) this.sliderValue = v
+          return this.sliderValue
+        },
+      }
+    },
     createButton() {
       return {
         position() {},
@@ -130,7 +153,7 @@ const context = loadApp('?ns=2&all=0')
 let s = state(context)
 
 vm.runInContext(
-  'swm = [[0,0], [0,0], [10,0]]; ci = [2,2,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
+  'swm = [[0,0], [0,0], [10,0]]; crushes = [[2],[2],[0]]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
   context,
 )
 s = state(context)

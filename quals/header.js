@@ -72,6 +72,19 @@ function loadApp(search) {
         removeAttribute() {},
       }
     },
+    createSlider(_min, _max, value) {
+      return {
+        sliderValue: value,
+        position() {},
+        size() {},
+        style() {},
+        input() {},
+        value(v) {
+          if (arguments.length) this.sliderValue = v
+          return this.sliderValue
+        },
+      }
+    },
     createCheckbox() {
       return {
         position() {},
@@ -88,7 +101,7 @@ function loadApp(search) {
   return { context, calls }
 }
 
-const der = loadApp('?ns=5&all=0')
+const der = loadApp('?ns=5&self=0&pursue=0&pursuers=0')
 vm.runInContext('instructions()', der.context)
 assert.equal(
   der.calls[0].s.startsWith('Amorous Swimmers'),
@@ -103,14 +116,14 @@ assert.deepEqual(
     '5 swimmers, 44 derangements',
     '(800x600 pixels)',
   ],
-  `replicata: load the app with ?ns=5&all=0 and call instructions()
+  `replicata: load the app with ?ns=5&self=0&pursue=0&pursuers=0 and call instructions()
 expectata: the header shows the swimmer/derangement counts and the pixel count separately
 resultata: the trailing text calls were ${JSON.stringify(der.calls.slice(1).map(c => c.s))}`,
 )
 assert.equal(
   der.calls[2].x + der.context.textWidth(der.calls[2].s),
   427,
-  `replicata: load the app with ?ns=5&all=0 and call instructions()
+  `replicata: load the app with ?ns=5&self=0&pursue=0&pursuers=0 and call instructions()
 expectata: the pixel count ends flush with the right edge of the rainbar at x=427
 resultata: it ended at x=${der.calls[2].x + der.context.textWidth(der.calls[2].s)}`,
 )
@@ -123,4 +136,24 @@ assert.equal(
   `replicata: load the app with ?ns=3&all=1 and call instructions()
 expectata: the header shows the swimmer count and crush-map count in all-crush mode
 resultata: the left header text was ${all.calls[1].s}`,
+)
+
+const multi = loadApp('?ns=3&self=1&pursue=1&pursuers=1')
+vm.runInContext('instructions()', multi.context)
+assert.equal(
+  multi.calls[1].s,
+  '3 swimmers, 343 crush maps',
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1 and call instructions()
+expectata: the header shows the all-subsets count in crush-map mode
+resultata: the left header text was ${multi.calls[1].s}`,
+)
+
+const bias = loadApp('?ns=3&self=0&pursue=1&pursuers=1')
+vm.runInContext('biaslegend()', bias.context)
+assert.deepEqual(
+  bias.calls.map(c => c.s),
+  ['prope', 'centrum', 'procul'],
+  `replicata: load the app with ?ns=3&self=0&pursue=1&pursuers=1 and call biaslegend()
+expectata: the slider legend shows the Latin near/centroid/far labels
+resultata: the legend text calls were ${JSON.stringify(bias.calls.map(c => c.s))}`,
 )

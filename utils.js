@@ -110,23 +110,123 @@ function allDerangements(n) {
                             .filter(p => p.every((v, i) => v !== i))
 }
 
-function crushCount(n) {
+const crushfamily = {
+  '000': 'derangements',
+  '001': 'crushmaps',
+  '010': 'derangements',
+  '011': 'multicrushmaps',
+  '100': 'permutations',
+  '101': 'endofunctions',
+  '110': 'permutations',
+  '111': 'multicrushselfmaps',
+}
+
+function crushFamily(opts = {}) {
+  const selfPursuit = opts.selfPursuit ?? false
+  const pursueMany = opts.pursueMany ?? false
+  const manyPursuers = opts.manyPursuers ?? true
+  const key = `${selfPursuit ? 1 : 0}${pursueMany ? 1 : 0}${manyPursuers ? 1 : 0}`
+  return crushfamily[key]
+}
+
+function crushRank(rank, count) {
+  const r = typeof rank === 'bigint' ? rank : BigInt(rank)
+  if (r < 0n || r >= count)
+    throw new Error(`Expected rank to be an integer from 0 to ${count-1n}; got ${rank}`)
+  return r
+}
+
+function singletonMap(map) { return map.map(x => [x]) }
+
+function subsetChoices(n, swimmer, selfPursuit) {
+  return selfPursuit ? range(n) : range(n).filter(j => j !== swimmer)
+}
+
+function subsetFromDigit(n, swimmer, digit, selfPursuit) {
+  const choices = subsetChoices(n, swimmer, selfPursuit)
+  const mask = digit + 1
+  return choices.filter((_, bit) => mask & (1 << bit))
+}
+
+function crushMapCount(n, opts = {}) {
   if (!Number.isInteger(n) || n < 2)
     throw new Error(`Expected n to be an integer >= 2; got ${n}`)
-  return (n-1) ** n
+  const family = crushFamily(opts)
+  const countbyfamily = {
+    derangements: () => BigInt(allDerangements(n).length),
+    crushmaps: () => BigInt(n-1) ** BigInt(n),
+    permutations: () => BigInt(factorial(n)),
+    endofunctions: () => BigInt(n) ** BigInt(n),
+    multicrushmaps: () => BigInt(2 ** (n-1) - 1) ** BigInt(n),
+    multicrushselfmaps: () => BigInt(2 ** n - 1) ** BigInt(n),
+  }
+  return countbyfamily[family]()
+}
+
+function nthCrushMap(n, rank, opts = {}) {
+  const family = crushFamily(opts)
+  const count = crushMapCount(n, opts)
+  let r = crushRank(rank, count)
+  const buildbyfamily = {
+    derangements() { return singletonMap(allDerangements(n)[Number(r)]) },
+    crushmaps() {
+      const crush = []
+      const base = BigInt(n-1)
+      for (let i = 0; i < n; i++) {
+        const choice = Number(r % base)
+        r /= base
+        crush[i] = [choice >= i ? choice + 1 : choice]
+      }
+      return crush
+    },
+    permutations() { return singletonMap(nthperm(n, Number(r))) },
+    endofunctions() {
+      const crush = []
+      const base = BigInt(n)
+      for (let i = 0; i < n; i++) {
+        crush[i] = [Number(r % base)]
+        r /= base
+      }
+      return crush
+    },
+    multicrushmaps() {
+      const crush = []
+      const base = BigInt(2 ** (n-1) - 1)
+      for (let i = 0; i < n; i++) {
+        const choice = Number(r % base)
+        r /= base
+        crush[i] = subsetFromDigit(n, i, choice, false)
+      }
+      return crush
+    },
+    multicrushselfmaps() {
+      const crush = []
+      const base = BigInt(2 ** n - 1)
+      for (let i = 0; i < n; i++) {
+        const choice = Number(r % base)
+        r /= base
+        crush[i] = subsetFromDigit(n, i, choice, true)
+      }
+      return crush
+    },
+  }
+  return buildbyfamily[family]()
+}
+
+function crushCount(n) {
+  return Number(crushMapCount(n, {
+    selfPursuit: false,
+    pursueMany: false,
+    manyPursuers: true,
+  }))
 }
 
 function nthCrush(n, rank) {
-  const count = crushCount(n)
-  if (!Number.isInteger(rank) || rank < 0 || rank >= count)
-    throw new Error(`Expected rank to be an integer from 0 to ${count-1}; got ${rank}`)
-  const crush = []
-  for (let i = 0; i < n; i++) {
-    const choice = rank % (n-1)
-    rank = Math.floor(rank / (n-1))
-    crush[i] = choice >= i ? choice + 1 : choice
-  }
-  return crush
+  return nthCrushMap(n, rank, {
+    selfPursuit: false,
+    pursueMany: false,
+    manyPursuers: true,
+  }).map(x => x[0])
 }
 
 // Return the point halfway (or x of the way) betw points a & b in the 2-D plane
