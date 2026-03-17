@@ -149,12 +149,12 @@ expectata: the header shows the all-subsets count in crush-map mode
 resultata: the left header text was ${multi.calls[1].s}`,
 )
 
-const bias = loadApp('?ns=3&self=0&pursue=1&pursuers=1')
+const bias = loadApp('?ns=3&self=0&pursue=1&pursuers=1&bias=2.5')
 vm.runInContext('biaslegend()', bias.context)
 assert.deepEqual(
   bias.calls.map(c => c.s),
-  ['pursue:', 'near', 'centroid', 'far'],
-  `replicata: load the app with ?ns=3&self=0&pursue=1&pursuers=1 and call biaslegend()
-expectata: the slider legend shows the pursue label plus the English near/centroid/far labels
+  ['pursue:', 'near', 'centroid', 'far', 'β=2.5'],
+  `replicata: load the app with ?ns=3&self=0&pursue=1&pursuers=1&bias=2.5 and call biaslegend()
+expectata: the slider legend shows the pursue label, the English near/centroid/far labels, and the current beta readout
 resultata: the legend text calls were ${JSON.stringify(bias.calls.map(c => c.s))}`,
 )

@@ -285,6 +285,13 @@ assert.equal(
 expectata: the bias slider installs a release handler so the center detent can snap on mouse-up
 resultata: typeof biasSlider.onchange is ${vm.runInContext('typeof biasSlider.onchange', context)}`,
 )
+assert.equal(
+  vm.runInContext('typeof biasSlider.oninput', context),
+  'function',
+  `replicata: call setup() and inspect biasSlider.oninput
+expectata: the bias slider installs a drag handler so bias preview updates while dragging
+resultata: typeof biasSlider.oninput is ${vm.runInContext('typeof biasSlider.oninput', context)}`,
+)
 vm.runInContext('setbias(biasmin)', context)
 assert.equal(
   vm.runInContext('pursuitBias', context),
@@ -316,7 +323,22 @@ expectata: the slider thumb stays at the right endpoint while internal bias is i
 resultata: the slider value is ${vm.runInContext('biasSlider.value()', context)}`,
 )
 vm.runInContext('setbias(0)', context)
-vm.runInContext('biasSlider.value(0.2); biasSlider.onchange()', context)
+vm.runInContext('biasSlider.value(0.2); biasSlider.oninput()', context)
+assert.equal(
+  vm.runInContext('pursuitBias', context),
+  0.2,
+  `replicata: call setup(), move the bias slider to 0.2, and trigger its drag handler
+expectata: dragging previews the raw bias before the center detent commits
+resultata: pursuitBias is ${vm.runInContext('pursuitBias', context)}`,
+)
+assert.equal(
+  vm.runInContext('biasSlider.value()', context),
+  0.2,
+  `replicata: call setup(), move the bias slider to 0.2, and trigger its drag handler
+expectata: dragging leaves the slider thumb at the dragged position before release
+resultata: the slider value is ${vm.runInContext('biasSlider.value()', context)}`,
+)
+vm.runInContext('biasSlider.onchange()', context)
 assert.equal(
   vm.runInContext('pursuitBias', context),
   0,

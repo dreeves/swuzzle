@@ -29,11 +29,9 @@ const biasstep = 0.1
 const biasdetent = 0.25
 const minbiasw = 56
 const biaslabw = 54
-function setpointbias(x) {
-  return x === biasmin ? -Infinity :
-         x === biasmax ? Infinity :
-         Math.abs(x) <= biasdetent ? 0 : x
-}
+const biasreadw = 70
+function edgebias(x) { return x === biasmin ? -Infinity : x === biasmax ? Infinity : x }
+function setpointbias(x) { return Math.abs(edgebias(x)) <= biasdetent ? 0 : edgebias(x) }
 function shownbias(x) { return Number.isFinite(x) ? x : Math.sign(x) * biasmax }
 if (!/^\d+$/.test(rawns) || ns < nsmin || ns > nsmax)
   throw new Error(`Expected ns query parameter to be an integer from ${nsmin} to ${nsmax}; got ${rawns}`)
@@ -154,6 +152,12 @@ function setbias(newbias) {
   resetscene()
 }
 
+function previewbias(newbias) {
+  pursuitBias = edgebias(newbias)
+  window.history.replaceState({}, null, swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias))
+  resetscene()
+}
+
 function avgpoint(pts) {
   return pts.reduce(
     (a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length],
@@ -199,13 +203,15 @@ function speedbtnswidth() {
   return speedspecs.length * buttonsz + (speedspecs.length - 1) * 4
 }
 
-function biaslead() { return min(biaslabw, max(rainwid() - speedbtnswidth() - 12 - minbiasw, 0)) }
+function biaslead() { return min(biaslabw, max(rainwid() - minbiasw, 0)) }
+
+function biasgutter() { return min(biasreadw, max(rainwid() - biaslead() - minbiasw, 0)) }
 
 function biasx() { return rainx + biaslead() }
 
 function biasy() { return buttony + 66 }
 
-function biaswid() { return max(minbiasw, rainwid() - speedbtnswidth() - 12 - biaslead()) }
+function biaswid() { return max(minbiasw, rainwid() - biaslead() - biasgutter()) }
 
 function biaslabely() { return lscale(biaslead(), 0, biaslabw, biasy() - 2, biasy() + 13) }
 
@@ -288,6 +294,8 @@ function biaslegend(g = screen()) {
   const left = 'near'
   const mid = 'centroid'
   const right = 'far'
+  // TODO: Recommend English webcopy "beta=".
+  const beta = `β=${Number.isFinite(pursuitBias) ? pursuitBias.toFixed(1) : (pursuitBias < 0 ? '-∞' : '∞')}`
   const y = biasy() + 26
   const x = biasx()
   const w = biaswid()
@@ -301,6 +309,7 @@ function biaslegend(g = screen()) {
   g.text(left, x, y)
   g.text(mid, cx - g.textWidth(mid)/2, y)
   g.text(right, x + w - g.textWidth(right), y)
+  g.text(beta, x + w + biasgutter() - g.textWidth(beta), biaslabely())
 }
 
 function infoup() {
@@ -905,6 +914,7 @@ function setup() {
   const btnswidth = speedbtnswidth()
   const btnpx = rainx + rainwid() - btnswidth
   const biasw = biaswid()
+  const dragbias = () => previewbias(Number(biasSlider.value()))
   const syncbias = () => setbias(Number(biasSlider.value()))
 
   biasSlider = createSlider(biasmin, biasmax, shownbias(pursuitBias), biasstep)
@@ -912,7 +922,7 @@ function setup() {
   biasSlider.size(biasw, 16)
   biasSlider.style('accent-color', '#20B2AA')
   biasSlider.style('cursor', 'pointer')
-  biasSlider.input(syncbias)
+  biasSlider.input(dragbias)
   biasSlider.changed?.(syncbias)
   biasSlider.elt?.addEventListener('change', syncbias)
   
