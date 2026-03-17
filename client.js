@@ -72,7 +72,7 @@ let minipos = []
 let pulses = []
 let hearts = []
 let hitseen = new Set()
-let playBloops = true
+let playBloops = false
 let audioCtx
 let trail
 let mingraph
