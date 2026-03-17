@@ -84,6 +84,7 @@ function loadApp(search) {
         size() {},
         style() {},
         input(fn) { this.oninput = fn },
+        changed(fn) { this.onchange = fn },
         value(v) {
           if (arguments.length) this.sliderValue = v
           return this.sliderValue
@@ -228,6 +229,45 @@ assert.equal(
 expectata: positive bias favors the farther crush, pushing the x-coordinate well right of the centroid
 resultata: the x-coordinate is ${targetFar[0]}`,
 )
+const targetNearest = JSON.parse(
+  vm.runInContext(
+    `pursuitBias = -Infinity; JSON.stringify(targetpoint([[0,0],[2,0],[10,0]], [1,2], 0))`,
+    context,
+  ),
+)
+assert.equal(
+  approx(targetNearest[0], 2),
+  true,
+  `replicata: set pursuitBias to -Infinity and call targetpoint([[0,0],[2,0],[10,0]], [1,2], 0)
+expectata: negative infinite bias pursues the exact nearest crush, so the x-coordinate is 2
+resultata: the x-coordinate is ${targetNearest[0]}`,
+)
+const targetFarthest = JSON.parse(
+  vm.runInContext(
+    `pursuitBias = Infinity; JSON.stringify(targetpoint([[0,0],[2,0],[10,0]], [1,2], 0))`,
+    context,
+  ),
+)
+assert.equal(
+  approx(targetFarthest[0], 10),
+  true,
+  `replicata: set pursuitBias to Infinity and call targetpoint([[0,0],[2,0],[10,0]], [1,2], 0)
+expectata: positive infinite bias pursues the exact farthest crush, so the x-coordinate is 10
+resultata: the x-coordinate is ${targetFarthest[0]}`,
+)
+const targetTie = JSON.parse(
+  vm.runInContext(
+    `pursuitBias = -Infinity; JSON.stringify(targetpoint([[0,0],[-2,0],[2,0]], [1,2], 0))`,
+    context,
+  ),
+)
+assert.equal(
+  approx(targetTie[0], 0),
+  true,
+  `replicata: set pursuitBias to -Infinity and call targetpoint([[0,0],[-2,0],[2,0]], [1,2], 0)
+expectata: tied nearest crushes follow the exact beta->-Infinity limit, so the target is their centroid at x=0
+resultata: the x-coordinate is ${targetTie[0]}`,
+)
 assert.throws(
   () => vm.runInContext('syncstep([[0,0],[10,0]], [[],[0]], 1)', context),
   /nonempty crush set/,
@@ -238,6 +278,75 @@ resultata: syncstep accepted an empty crush set`,
 
 vm.runInContext('pursuitBias = 0', context)
 vm.runInContext('setup()', context)
+assert.equal(
+  vm.runInContext('typeof biasSlider.onchange', context),
+  'function',
+  `replicata: call setup() and inspect biasSlider.onchange
+expectata: the bias slider installs a release handler so the center detent can snap on mouse-up
+resultata: typeof biasSlider.onchange is ${vm.runInContext('typeof biasSlider.onchange', context)}`,
+)
+vm.runInContext('setbias(biasmin)', context)
+assert.equal(
+  vm.runInContext('pursuitBias', context),
+  -Infinity,
+  `replicata: call setup() and then call setbias(biasmin)
+expectata: the left slider endpoint stores negative infinite bias
+resultata: pursuitBias is ${vm.runInContext('pursuitBias', context)}`,
+)
+assert.equal(
+  vm.runInContext('biasSlider.value()', context),
+  -6,
+  `replicata: call setup() and then call setbias(biasmin)
+expectata: the slider thumb stays at the left endpoint while internal bias is infinite
+resultata: the slider value is ${vm.runInContext('biasSlider.value()', context)}`,
+)
+vm.runInContext('setbias(biasmax)', context)
+assert.equal(
+  vm.runInContext('pursuitBias', context),
+  Infinity,
+  `replicata: call setup() and then call setbias(biasmax)
+expectata: the right slider endpoint stores positive infinite bias
+resultata: pursuitBias is ${vm.runInContext('pursuitBias', context)}`,
+)
+assert.equal(
+  vm.runInContext('biasSlider.value()', context),
+  6,
+  `replicata: call setup() and then call setbias(biasmax)
+expectata: the slider thumb stays at the right endpoint while internal bias is infinite
+resultata: the slider value is ${vm.runInContext('biasSlider.value()', context)}`,
+)
+vm.runInContext('setbias(0)', context)
+vm.runInContext('biasSlider.value(0.2); biasSlider.onchange()', context)
+assert.equal(
+  vm.runInContext('pursuitBias', context),
+  0,
+  `replicata: call setup(), move the bias slider to 0.2, and trigger its release handler
+expectata: the slider detent snaps small released bias values to 0
+resultata: pursuitBias is ${vm.runInContext('pursuitBias', context)}`,
+)
+assert.equal(
+  vm.runInContext('biasSlider.value()', context),
+  0,
+  `replicata: call setup(), move the bias slider to 0.2, and trigger its release handler
+expectata: the slider thumb snaps back to the center detent at 0 on release
+resultata: the slider value is ${vm.runInContext('biasSlider.value()', context)}`,
+)
+vm.runInContext('biasSlider.value(0.4); biasSlider.onchange()', context)
+assert.equal(
+  vm.runInContext('pursuitBias', context),
+  0.4,
+  `replicata: call setup(), move the bias slider to 0.4, and trigger its release handler
+expectata: released values outside the detent keep their bias
+resultata: pursuitBias is ${vm.runInContext('pursuitBias', context)}`,
+)
+assert.equal(
+  vm.runInContext('biasSlider.value()', context),
+  0.4,
+  `replicata: call setup(), move the bias slider to 0.4, and trigger its release handler
+expectata: the slider thumb stays off center outside the detent
+resultata: the slider value is ${vm.runInContext('biasSlider.value()', context)}`,
+)
+vm.runInContext('setbias(0)', context)
 let s = state(context)
 assert.equal(
   approx(s.swm[0][0], 788),

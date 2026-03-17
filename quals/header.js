@@ -79,6 +79,7 @@ function loadApp(search) {
         size() {},
         style() {},
         input() {},
+        changed() {},
         value(v) {
           if (arguments.length) this.sliderValue = v
           return this.sliderValue
@@ -152,8 +153,8 @@ const bias = loadApp('?ns=3&self=0&pursue=1&pursuers=1')
 vm.runInContext('biaslegend()', bias.context)
 assert.deepEqual(
   bias.calls.map(c => c.s),
-  ['prope', 'centrum', 'procul'],
+  ['pursue:', 'near', 'centroid', 'far'],
   `replicata: load the app with ?ns=3&self=0&pursue=1&pursuers=1 and call biaslegend()
-expectata: the slider legend shows the Latin near/centroid/far labels
+expectata: the slider legend shows the pursue label plus the English near/centroid/far labels
 resultata: the legend text calls were ${JSON.stringify(bias.calls.map(c => c.s))}`,
 )

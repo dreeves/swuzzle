@@ -85,6 +85,7 @@ function loadApp(search) {
         size() {},
         style() {},
         input(fn) { this.oninput = fn },
+        changed(fn) { this.onchange = fn },
         value(v) {
           if (arguments.length) this.sliderValue = v
           return this.sliderValue
@@ -247,4 +248,12 @@ assert.equal(
   `replicata: load the app with ?ns=3&self=0&pursue=1&pursuers=1&bias=2.5
 expectata: the pursuit bias is restored from the query string
 resultata: pursuitBias is ${biasState.pursuitBias}`,
+)
+const edgeBiasContext = loadApp('?ns=3&self=0&pursue=1&pursuers=1&bias=6')
+assert.equal(
+  vm.runInContext('pursuitBias', edgeBiasContext),
+  Infinity,
+  `replicata: load the app with ?ns=3&self=0&pursue=1&pursuers=1&bias=6
+expectata: the right slider endpoint restores positive infinite bias
+resultata: pursuitBias is ${vm.runInContext('pursuitBias', edgeBiasContext)}`,
 )

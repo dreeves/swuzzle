@@ -26,6 +26,15 @@ const rawbias = getQueryParam('bias')
 const biasmin = -6
 const biasmax = 6
 const biasstep = 0.1
+const biasdetent = 0.25
+const minbiasw = 56
+const biaslabw = 54
+function setpointbias(x) {
+  return x === biasmin ? -Infinity :
+         x === biasmax ? Infinity :
+         Math.abs(x) <= biasdetent ? 0 : x
+}
+function shownbias(x) { return Number.isFinite(x) ? x : Math.sign(x) * biasmax }
 if (!/^\d+$/.test(rawns) || ns < nsmin || ns > nsmax)
   throw new Error(`Expected ns query parameter to be an integer from ${nsmin} to ${nsmax}; got ${rawns}`)
 function boolparam(name, raw, def) {
@@ -45,7 +54,7 @@ const legacyall = rawself === false && rawpursue === false &&
 let selfPursuit = boolparam('self', rawself, '0')
 let pursueMany = boolparam('pursue', rawpursue, '0')
 let manyPursuers = boolparam('pursuers', rawpursuers, legacyall ? rawall : '0')
-let pursuitBias = numparam('bias', rawbias, 0, biasmin, biasmax)
+let pursuitBias = setpointbias(numparam('bias', rawbias, 0, biasmin, biasmax))
 if (rawall !== false && rawall !== '0' && rawall !== '1')
   throw new Error(`Expected all query parameter to be 0 or 1; got ${rawall}`)
 window.history.replaceState({}, null, swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias))
@@ -139,10 +148,17 @@ function updatemodeboxes() {
 }
 
 function setbias(newbias) {
-  pursuitBias = newbias
-  if (biasSlider) biasSlider.value(pursuitBias)
+  pursuitBias = setpointbias(newbias)
+  if (biasSlider) biasSlider.value(shownbias(pursuitBias))
   window.history.replaceState({}, null, swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias))
   resetscene()
+}
+
+function avgpoint(pts) {
+  return pts.reduce(
+    (a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length],
+    [0, 0],
+  )
 }
 
 function targetpoint(points, ids, swimmer) {
@@ -151,6 +167,10 @@ function targetpoint(points, ids, swimmer) {
   const pursuer = points[swimmer]
   const pts = ids.map(j => points[j])
   const ds = pts.map(p => pdist(pursuer, p))
+  if (!Number.isFinite(pursuitBias)) {
+    const edge = pursuitBias < 0 ? min(...ds) : max(...ds)
+    return avgpoint(pts.filter((_, i) => ds[i] === edge))
+  }
   const mean = ds.reduce((a, d) => a + d, 0) / ds.length
   const scale = max(max(...ds) - min(...ds), 1e-9)
   const ws = ds.map(d => Math.exp(pursuitBias * (d - mean) / scale))
@@ -179,11 +199,15 @@ function speedbtnswidth() {
   return speedspecs.length * buttonsz + (speedspecs.length - 1) * 4
 }
 
-function biasx() { return rainx }
+function biaslead() { return min(biaslabw, max(rainwid() - speedbtnswidth() - 12 - minbiasw, 0)) }
+
+function biasx() { return rainx + biaslead() }
 
 function biasy() { return buttony + 66 }
 
-function biaswid() { return max(56, rainwid() - speedbtnswidth() - 12) }
+function biaswid() { return max(minbiasw, rainwid() - speedbtnswidth() - 12 - biaslead()) }
+
+function biaslabely() { return lscale(biaslead(), 0, biaslabw, biasy() - 2, biasy() + 13) }
 
 function recalcmode() {
   family = currentmode()
@@ -218,7 +242,7 @@ function instructions(g = screen()) {
 }
 
 function swuzurl(n, self, pursue, pursuers, bias) {
-  return `?ns=${n}&self=${self ? 1 : 0}&pursue=${pursue ? 1 : 0}&pursuers=${pursuers ? 1 : 0}&bias=${Number(bias.toFixed(1))}`
+  return `?ns=${n}&self=${self ? 1 : 0}&pursue=${pursue ? 1 : 0}&pursuers=${pursuers ? 1 : 0}&bias=${Number(shownbias(bias).toFixed(1))}`
 }
 
 function rainwid() { return max(0, min(rainw, width - 2*rainx)) }
@@ -258,17 +282,24 @@ function rainfill(frac, g = screen()) {
 }
 
 function biaslegend(g = screen()) {
+  // TODO: update quals with these english labels, signed: the human
+  // TODO: Recommend English webcopy "pursue:".
+  const biaslabel = 'pursue:'
   const left = 'near'
   const mid = 'centroid'
   const right = 'far'
   const y = biasy() + 26
   const x = biasx()
   const w = biaswid()
+  const cx = x + w/2
   g.noStroke()
+  g.fill(0, 0, 0.55)
+  g.rect(cx - 1, biasy() + 2, 2, 14)
   g.fill(0, 0, 0.75)
   g.textSize(12)
+  g.text(biaslabel, rainx, biaslabely())
   g.text(left, x, y)
-  g.text(mid, x + w/2 - g.textWidth(mid)/2, y)
+  g.text(mid, cx - g.textWidth(mid)/2, y)
   g.text(right, x + w - g.textWidth(right), y)
 }
 
@@ -874,13 +905,16 @@ function setup() {
   const btnswidth = speedbtnswidth()
   const btnpx = rainx + rainwid() - btnswidth
   const biasw = biaswid()
+  const syncbias = () => setbias(Number(biasSlider.value()))
 
-  biasSlider = createSlider(biasmin, biasmax, pursuitBias, biasstep)
+  biasSlider = createSlider(biasmin, biasmax, shownbias(pursuitBias), biasstep)
   biasSlider.position(biasx(), biasy())
   biasSlider.size(biasw, 16)
   biasSlider.style('accent-color', '#20B2AA')
   biasSlider.style('cursor', 'pointer')
-  biasSlider.input(() => setbias(Number(biasSlider.value())))
+  biasSlider.input(syncbias)
+  biasSlider.changed?.(syncbias)
+  biasSlider.elt?.addEventListener('change', syncbias)
   
   speedspecs.forEach((s, idx) => {
     let b = createButton(s.em)

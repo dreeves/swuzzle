@@ -84,6 +84,7 @@ function loadApp(search, windowWidth, windowHeight) {
         size() {},
         style() {},
         input(fn) { this.oninput = fn },
+        changed(fn) { this.onchange = fn },
         value(v) {
           if (arguments.length) this.sliderValue = v
           return this.sliderValue
