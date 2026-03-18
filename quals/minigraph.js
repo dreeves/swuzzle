@@ -111,6 +111,7 @@ function loadApp(search) {
       }
     },
     graphOps: 0,
+    graphNodes: [],
     blits: 0,
     made: 0,
     createGraphics() {
@@ -149,7 +150,10 @@ function loadApp(search) {
           stroke() {},
           strokeWeight() {},
           line() { context.graphOps += 1 },
-          ellipse() { context.graphOps += 1 },
+          ellipse(x, y) {
+            context.graphOps += 1
+            context.graphNodes.push([x, y])
+          },
           image() {},
           textAlign() {},
           textSize() {},
@@ -212,4 +216,21 @@ assert.equal(
   `replicata: load the app with ?ns=3&all=0, call setup(), then call draw() once
 expectata: the cached mini graph is blitted once onto the overlay during draw()
 resultata: the cached mini graph was blitted ${context.blits - blits} times during draw()`,
+)
+
+context.graphNodes = []
+vm.runInContext('cacheMiniGraph()', context)
+const moved = JSON.parse(
+  vm.runInContext(
+    'JSON.stringify({ nodes: graphNodes, want: minipos })',
+    context,
+  ),
+)
+
+assert.deepEqual(
+  moved.nodes,
+  moved.want,
+  `replicata: load the app with ?ns=3&all=0 and call cacheMiniGraph()
+expectata: the mini graph redraws its nodes at the base mini-swimmer positions
+resultata: the cached node positions were ${JSON.stringify(moved.nodes)} instead of ${JSON.stringify(moved.want)}`,
 )

@@ -140,6 +140,11 @@ function modencrush() { return Number(ncrush) }
 
 function currentmode() { return crushFamily(modeopts()) }
 
+function nthmap(rank) {
+  if (family === 'derangements') return activederangement(rank)
+  return nthCrushMap(ns, rank, modeopts())
+}
+
 function updatemodeboxes() {
   if (!pursueBox) return
   pursueBox.style('opacity', manyPursuers ? '1' : '0.45')
@@ -173,7 +178,9 @@ function targetpoint(points, ids, swimmer) {
   const ds = pts.map(p => pdist(pursuer, p))
   if (!Number.isFinite(pursuitBias)) {
     const edge = pursuitBias < 0 ? min(...ds) : max(...ds)
-    return avgpoint(pts.filter((_, i) => ds[i] === edge))
+    const span = max(...ds) - min(...ds)
+    const tol = max(1e-9, span * 1e-9)
+    return avgpoint(pts.filter((_, i) => Math.abs(ds[i] - edge) <= tol))
   }
   const mean = ds.reduce((a, d) => a + d, 0) / ds.length
   const scale = max(max(...ds) - min(...ds), 1e-9)
@@ -502,10 +509,10 @@ function drawMiniGraph(g) {
   g.image(mingraph, graphcorner[0] - gs/2, graphcorner[1] - gs/2, gs, gs)
 }
 
-function swmgroups() {
+function swmgroups(points = swm) {
   const groups = []
-  for (let i = 0; i < swm.length; i++) {
-    const g = groups.find(g => g.some(j => pdist(swm[i], swm[j]) < coalescepx))
+  for (let i = 0; i < points.length; i++) {
+    const g = groups.find(g => g.some(j => pdist(points[i], points[j]) < coalescepx))
     if (g) g.push(i); else groups.push([i])
   }
   return groups
@@ -513,16 +520,20 @@ function swmgroups() {
 
 function traildots(g = screen()) {
   const tg = targetpoints(swm, crushes)
+  const fracs = swm.map((p, i) => di[i] === 0 ? 1 : 1 - pdist(p, tg[i]) / di[i])
   for (let i = 0; i < swm.length; i++) {
-    const frac = di[i] === 0 ? 1 : 1 - pdist(swm[i], tg[i]) / di[i]
-    g.fill(blink(frac), 1,1)
-    g.ellipse(swm[i][0], swm[i][1], 2)
+    tracedot(g, swm[i], fracs[i])
   }
 }
 
-function groupbox(g) {
+function tracedot(g, p, frac) {
+  g.fill(blink(frac), 1,1)
+  g.ellipse(p[0], p[1], 2)
+}
+
+function groupbox(g, points = swm) {
   const r = headr * sqrt(g.length)
-  return { cx: swm[g[0]][0], cy: swm[g[0]][1], r }
+  return { cx: points[g[0]][0], cy: points[g[0]][1], r }
 }
 
 function spawnhit(i) {
@@ -614,14 +625,14 @@ function drawfx(g = screen()) {
   drawHearts(g)
 }
 
-function drawHeads(groups) {
+function drawHeads(groups, points = swm) {
+  overlay.noStroke()
   // Then draw all heads (area proportional to group size)
   // Numbers arranged in a mini circle inside the head
-  overlay.noStroke()
   overlay.textAlign(CENTER, CENTER)
   overlay.textSize(9)
   for (const g of groups) {
-    const { cx, cy, r } = groupbox(g)
+    const { cx, cy, r } = groupbox(g, points)
     overlay.fill(1, 0, 1) // bright white head
     overlay.ellipse(cx, cy, r * 2)
     overlay.fill(0, 0, 0) // black numbers
@@ -634,9 +645,9 @@ function drawHeads(groups) {
   overlay.textAlign(LEFT, BASELINE)
 }
 
-function drawoverlay(groups) {
+function drawoverlay(groups, points = swm) {
   overlay.clear()
-  drawHeads(groups)
+  drawHeads(groups, points)
   drawMiniGraph(overlay)
 }
 
@@ -700,8 +711,17 @@ function styleButton(button) {
   button.style('box-shadow', '0 2px 4px rgba(0, 0, 0, 0.5)')
 }
 
+function nextfreshmap(rank) {
+  const r = BigInt(rank)
+  if (r >= ncrush) return null
+  return { rank: r, crushmap: nthmap(r) }
+}
+
 function loadCrushMap() {
-  crushes = family === 'derangements' ? activederangement(n) : nthCrushMap(ns, n, modeopts())
+  const next = nextfreshmap(n)
+  if (!next) return false
+  n = next.rank
+  crushes = next.crushmap
   swm = baseswm.map(([x, y]) => [x, y])
   const tg = targetpoints(swm, crushes)
   for (let i = 0; i < swm.length; i++) {
@@ -709,6 +729,7 @@ function loadCrushMap() {
   }
   hitseen = new Set()
   cacheMiniGraph()
+  return true
 }
 
 function resetscene() {
@@ -725,7 +746,8 @@ function resetscene() {
   graphcorner = bestCorner(baseswm)
   minipos = genMiniSwimmers(ns, mingraphsz/2 + mingraphpad,
                             mingraphsz/2 + mingraphpad, mingraphr)
-  loadCrushMap()
+  if (!loadCrushMap())
+    throw new Error('Expected at least one crush map')
   si = range(swm.length).map(x => 1)
   instructions(trail)
   rainbar(trail)
@@ -758,19 +780,20 @@ function cacheMiniGraph() {
   mingraph.noStroke()
   mingraph.fill(0, 0, 0, 0.7)
   mingraph.rect(0, 0, mingraphsz + 2*mingraphpad, mingraphsz + 2*mingraphpad)
+  const pts = minipos
 
   for (let i = 0; i < ns; i++) {
-    crushes[i].filter(j => j !== i).forEach(j => drawArrow(mingraph, minipos[i], minipos[j], 4))
+    crushes[i].filter(j => j !== i).forEach(j => drawArrow(mingraph, pts[i], pts[j], 4))
   }
 
   for (let i = 0; i < ns; i++) {
     mingraph.noStroke()
     mingraph.fill('White')
-    mingraph.ellipse(minipos[i][0], minipos[i][1], 12)
+    mingraph.ellipse(pts[i][0], pts[i][1], 12)
     mingraph.fill('Black')
     mingraph.textAlign(CENTER, CENTER)
     mingraph.textSize(10)
-    mingraph.text(i, minipos[i][0], minipos[i][1])
+    mingraph.text(i, pts[i][0], pts[i][1])
   }
 }
 
@@ -810,13 +833,13 @@ function draw() {
     }
     coalesced = false
     n += 1n
-    if (n >= ncrush) {
+    if (!loadCrushMap()) {
       overlay.clear()
+      rainfill(1, trail)
       composite()
       noLoop()
-      return
     }
-    loadCrushMap()
+    return
   } else {
     if (advanceswimmers()) {
       coalesced = true

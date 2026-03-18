@@ -145,7 +145,7 @@ assert.equal(
   multi.calls[1].s,
   '3 swimmers, 343 crush maps',
   `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1 and call instructions()
-expectata: the header shows the all-subsets count in crush-map mode
+expectata: the header shows the raw all-checked count in crush-map mode
 resultata: the left header text was ${multi.calls[1].s}`,
 )
 

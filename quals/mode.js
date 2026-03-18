@@ -148,7 +148,7 @@ function loadApp(search) {
 function state(context) {
   return JSON.parse(
     vm.runInContext(
-      'JSON.stringify({ selfPursuit, pursueMany, manyPursuers, pursuitBias, family, crushes })',
+      'JSON.stringify({ selfPursuit, pursueMany, manyPursuers, pursuitBias, family, crushes, ncrush: ncrush.toString() })',
       context,
     ),
   )
@@ -232,11 +232,18 @@ assert.equal(
 expectata: the active family is the all-subsets family
 resultata: family is ${multiState.family}`,
 )
+assert.equal(
+  multiState.ncrush,
+  '343',
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1
+expectata: the default centroid bias still uses the raw 343-map all-checked family because no exact simulator-level normalization has been applied
+resultata: ncrush is ${multiState.ncrush}`,
+)
 assert.deepEqual(
   multiState.crushes,
   [[0], [0], [0]],
   `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1
-expectata: the first all-subsets crush map has each swimmer pursuing the singleton subset {0}
+expectata: the first raw all-checked crush map has every swimmer pursuing swimmer 0
 resultata: the initial crush map is ${JSON.stringify(multiState.crushes)}`,
 )
 
@@ -248,6 +255,15 @@ assert.equal(
   `replicata: load the app with ?ns=3&self=0&pursue=1&pursuers=1&bias=2.5
 expectata: the pursuit bias is restored from the query string
 resultata: pursuitBias is ${biasState.pursuitBias}`,
+)
+const offCentroidContext = loadApp('?ns=3&self=1&pursue=1&pursuers=1&bias=0.3')
+const offCentroidState = state(offCentroidContext)
+assert.equal(
+  offCentroidState.ncrush,
+  '343',
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&bias=0.3
+expectata: off-centroid bias falls back to the raw 343-map all-checked family
+resultata: ncrush is ${offCentroidState.ncrush}`,
 )
 const edgeBiasContext = loadApp('?ns=3&self=0&pursue=1&pursuers=1&bias=6')
 assert.equal(

@@ -213,6 +213,118 @@ function nthCrushMap(n, rank, opts = {}) {
   return buildbyfamily[family]()
 }
 
+function weakCrushComponents(crushmap) {
+  const adj = crushmap.map(() => new Set())
+  for (let i = 0; i < crushmap.length; i++) {
+    for (const j of crushmap[i]) {
+      adj[i].add(j)
+      adj[j].add(i)
+    }
+  }
+  const seen = crushmap.map(() => false)
+  const comps = []
+  for (let i = 0; i < crushmap.length; i++) {
+    if (seen[i]) continue
+    const comp = []
+    const q = [i]
+    seen[i] = true
+    while (q.length > 0) {
+      const j = q.pop()
+      comp.push(j)
+      for (const k of adj[j]) {
+        if (seen[k]) continue
+        seen[k] = true
+        q.push(k)
+      }
+    }
+    comps.push(comp.sort((a, b) => a - b))
+  }
+  return comps
+}
+
+function componentKey(crushmap, comp) {
+  const mem = [...comp].sort((a, b) => a - b)
+  const n = crushmap.length
+  const want = JSON.stringify(mem)
+  const forms = []
+  for (let k = 0; k < n; k++) {
+    const rot = mem.map(i => (i + k) % n).sort((a, b) => a - b)
+    if (JSON.stringify(rot) !== want) continue
+    const back = new Map(mem.map((v, i) => [((v + k) % n), i]))
+    forms.push(JSON.stringify(mem.map(v => crushmap[(v + k) % n].map(w => back.get(w)).sort((a, b) => a - b))))
+  }
+  for (let k = 0; k < n; k++) {
+    const ref = mem.map(i => (k - i + n) % n).sort((a, b) => a - b)
+    if (JSON.stringify(ref) !== want) continue
+    const back = new Map(mem.map((v, i) => [((k - v + n) % n), i]))
+    forms.push(JSON.stringify(mem.map(v => crushmap[(k - v + n) % n].map(w => back.get(w)).sort((a, b) => a - b))))
+  }
+  return JSON.stringify([mem, forms.sort()[0]])
+}
+
+function componentKeys(crushmap) {
+  return weakCrushComponents(crushmap).map(comp => componentKey(crushmap, comp))
+}
+
+function redundantCrushMap(crushmap, seen) {
+  return componentKeys(crushmap).every(key => seen.has(key))
+}
+
+function motifKey(crushmap, comp) {
+  const n = crushmap.length
+  const mem = [...comp].sort((a, b) => a - b)
+  return orbitActs(n).map(act => {
+    const img = mem.map(i => actIndex(n, act, i)).sort((a, b) => a - b)
+    const back = new Map(img.map((v, i) => [v, i]))
+    const local = img.map(v =>
+      crushmap[invIndex(n, act, v)].map(w => back.get(actIndex(n, act, w))).sort((a, b) => a - b))
+    return JSON.stringify([img, local])
+  }).sort()[0]
+}
+
+function motifKeys(crushmap) {
+  return weakCrushComponents(crushmap).map(comp => motifKey(crushmap, comp))
+}
+
+function orbitActs(n) {
+  return range(n).flatMap(k => [{ flip: false, k }, { flip: true, k }])
+}
+
+function actIndex(n, act, i) {
+  return act.flip ? mod(act.k - i, n) : mod(i + act.k, n)
+}
+
+function invIndex(n, act, i) {
+  return act.flip ? mod(act.k - i, n) : mod(i - act.k, n)
+}
+
+function actCrushMap(crushmap, act) {
+  const n = crushmap.length
+  return range(n).map(i =>
+    crushmap[invIndex(n, act, i)].map(j => actIndex(n, act, j)).sort((a, b) => a - b),
+  )
+}
+
+function crushMapString(crushmap) { return JSON.stringify(crushmap) }
+
+function orbitKey(crushmap) {
+  return orbitActs(crushmap.length).map(act => crushMapString(actCrushMap(crushmap, act))).sort()[0]
+}
+
+function isOrbitRep(crushmap) {
+  return crushMapString(crushmap) === orbitKey(crushmap)
+}
+
+function uniqueOrbitActs(crushmap) {
+  const seen = new Set()
+  return orbitActs(crushmap.length).filter(act => {
+    const key = crushMapString(actCrushMap(crushmap, act))
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function crushCount(n) {
   return Number(crushMapCount(n, {
     selfPursuit: false,

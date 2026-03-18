@@ -203,6 +203,22 @@ assert.equal(
 expectata: zero bias gives the centroid, so the x-coordinate is 6
 resultata: the x-coordinate is ${target0[0]}`,
 )
+const centroidCounterexample = JSON.parse(
+  vm.runInContext(
+    `pursuitBias = 0; JSON.stringify({
+      withself: syncstep([[0,0],[0.2,0],[1,0]], [[0,1,2],[0],[0]], 0.5),
+      withoutself: syncstep([[0,0],[0.2,0],[1,0]], [[1,2],[0],[0]], 0.5),
+    })`,
+    context,
+  ),
+)
+assert.equal(
+  approx(centroidCounterexample.withself[0][0], centroidCounterexample.withoutself[0][0]),
+  false,
+  `replicata: set pursuitBias to 0 and compare syncstep([[0,0],[0.2,0],[1,0]], [[0,1,2],[0],[0]], 0.5) to syncstep([[0,0],[0.2,0],[1,0]], [[1,2],[0],[0]], 0.5)
+expectata: including self in a nonsingleton crush set is not an exact simulator-level equivalence, because pairstep can freeze one target while advancing toward the other
+resultata: swimmer 0 ended at x=${centroidCounterexample.withself[0][0]} with self included and x=${centroidCounterexample.withoutself[0][0]} without self`,
+)
 const targetNear = JSON.parse(
   vm.runInContext(
     `pursuitBias = -6; JSON.stringify(targetpoint([[0,0],[2,0],[10,0]], [1,2], 0))`,
@@ -274,6 +290,133 @@ assert.throws(
   `replicata: call syncstep([[0,0],[10,0]], [[],[0]], 1)
 expectata: an empty crush set crashes immediately because its centroid is undefined
 resultata: syncstep accepted an empty crush set`,
+)
+
+const trailState = JSON.parse(
+  vm.runInContext(
+    `(() => {
+      const oldns = ns
+      const oldswm = swm
+      const oldcrushes = crushes
+      const olddi = di
+      const dots = []
+      ns = 3
+      swm = [[15, 17]]
+      crushes = [[0]]
+      di = [1]
+      traildots({
+        fill() {},
+        ellipse(x, y) { dots.push([Number(x.toFixed(6)), Number(y.toFixed(6))]) },
+      })
+      ns = oldns
+      swm = oldswm
+      crushes = oldcrushes
+      di = olddi
+      return JSON.stringify({ dots })
+    })()`,
+    context,
+  ),
+)
+assert.equal(
+  trailState.dots.length,
+  1,
+  `replicata: set ns=3 with one generic swimmer point and call traildots() with a fake graphics context
+expectata: traildots stamps only the actual swimmer trail point
+resultata: it stamped ${trailState.dots.length} points: ${JSON.stringify(trailState.dots)}`,
+)
+const nextMapState = JSON.parse(
+  vm.runInContext(
+    `(() => {
+      const oldns = ns
+      const oldself = selfPursuit
+      const oldpursue = pursueMany
+      const oldpursuers = manyPursuers
+      setup()
+      setmode(3, false, false, true)
+      const first = JSON.stringify(crushes)
+      while (!coalesced) draw()
+      pauseframes = 0
+      draw()
+      const out = JSON.stringify({
+        first,
+        second: JSON.stringify(crushes),
+        n: n.toString(),
+        coalesced,
+        swm,
+        baseswm,
+      })
+      setmode(oldns, oldself, oldpursue, oldpursuers)
+      return out
+    })()`,
+    context,
+  ),
+)
+assert.equal(
+  nextMapState.n,
+  '1',
+  `replicata: load the app with ?ns=3&all=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+expectata: the app advances directly to the next crushmap
+resultata: n became ${nextMapState.n}`,
+)
+assert.equal(
+  nextMapState.coalesced,
+  false,
+  `replicata: load the app with ?ns=3&all=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+expectata: the app leaves the coalesced state after loading the next crushmap
+resultata: coalesced was ${nextMapState.coalesced}`,
+)
+assert.equal(
+  nextMapState.first === nextMapState.second,
+  false,
+  `replicata: load the app with ?ns=3&all=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+expectata: a different crushmap is loaded after the pause
+resultata: the app kept the same crushmap ${nextMapState.first}`,
+)
+assert.deepEqual(
+  nextMapState.swm,
+  nextMapState.baseswm,
+  `replicata: load the app with ?ns=3&all=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+expectata: the new crushmap starts from the base swimmer positions
+resultata: swm was ${JSON.stringify(nextMapState.swm)} instead of ${JSON.stringify(nextMapState.baseswm)}`,
+)
+
+const tiePath = JSON.parse(
+  vm.runInContext(
+    `(() => {
+      pursuitBias = Infinity
+      let pts = genswimmers(3)
+      const crushmap = [[1,2],[1],[2]]
+      let steps = -1
+      for (let t = 0; t < 2000; t++) {
+        pts = syncstep(pts, crushmap, simstep)
+        const tg = targetpoints(pts, crushmap)
+        if (pts.every((p, j) => pdist(p, tg[j]) < simstep)) {
+          steps = t
+          break
+        }
+      }
+      return JSON.stringify({
+        steps,
+        target: targetpoint(pts, [1,2], 0).map(x => Number(x.toFixed(6))),
+        swimmer: pts[0].map(x => Number(x.toFixed(6))),
+      })
+    })()`,
+    context,
+  ),
+)
+assert.equal(
+  tiePath.steps >= 0,
+  true,
+  `replicata: set pursuitBias to Infinity and iterate syncstep() on the 3-swimmer crush map [[1,2],[1],[2]]
+expectata: the tied farthest crushes stay tied, so swimmer 0 converges to the midpoint and the map quiesces in finite time
+resultata: it ${tiePath.steps >= 0 ? 'did' : 'did not'} quiesce; final swimmer/target were ${JSON.stringify([tiePath.swimmer, tiePath.target])}`,
+)
+assert.equal(
+  Math.hypot(tiePath.swimmer[0] - tiePath.target[0], tiePath.swimmer[1] - tiePath.target[1]) < 0.5,
+  true,
+  `replicata: set pursuitBias to Infinity and iterate syncstep() on the 3-swimmer crush map [[1,2],[1],[2]] until it quiesces
+expectata: swimmer 0 ends within one simstep of the tied-extremum midpoint target
+resultata: the final swimmer and target were ${JSON.stringify([tiePath.swimmer, tiePath.target])}`,
 )
 
 vm.runInContext('pursuitBias = 0', context)
