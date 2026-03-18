@@ -65,12 +65,14 @@ const infoh = 26/2 // how many pixels high the info lines at the bottom are
 let derangements = []
 let family = ''
 let ncrush = 0n
+let rawncrush = 0n
 const rainx = 5, rainy = 20, rainw = 422, rainh = 17 // rainbar position/size
 const buttonsz = 38
 const buttgap = 9
 const buttony = rainy + rainh + 47
 let swm = [] // list of swimmers
 let n = 0n // number of derangements drawn so far
+let ri = 0n // raw crush-map rank cursor
 let dline = '' // text line with the distance
 let xyline = '' // x and y distances
 let crushline = '' // text line with crush relationships
@@ -225,9 +227,10 @@ function biaslabely() { return lscale(biaslead(), 0, biaslabw, biasy() - 2, bias
 function recalcmode() {
   family = currentmode()
   derangements = family === 'derangements' ? allDerangements(ns) : []
-  ncrush = family === 'derangements' ?
+  rawncrush = family === 'derangements' ?
     BigInt(derangements.length) :
     crushMapCount(ns, modeopts())
+  ncrush = connectedCrushMapCount(ns, modeopts())
 }
 
 recalcmode()
@@ -712,15 +715,17 @@ function styleButton(button) {
 }
 
 function nextfreshmap(rank) {
-  const r = BigInt(rank)
-  if (r >= ncrush) return null
-  return { rank: r, crushmap: nthmap(r) }
+  for (let r = BigInt(rank); r < rawncrush; r++) {
+    const crushmap = nthmap(r)
+    if (connectedCrushMap(crushmap)) return { rank: r, crushmap }
+  }
+  return null
 }
 
 function loadCrushMap() {
-  const next = nextfreshmap(n)
+  const next = nextfreshmap(ri)
   if (!next) return false
-  n = next.rank
+  ri = next.rank + 1n
   crushes = next.crushmap
   swm = baseswm.map(([x, y]) => [x, y])
   const tg = targetpoints(swm, crushes)
@@ -734,6 +739,7 @@ function loadCrushMap() {
 
 function resetscene() {
   n = 0n
+  ri = 0n
   pauseframes = 0
   coalesced = false
   pulses = []

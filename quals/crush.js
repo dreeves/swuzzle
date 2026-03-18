@@ -32,6 +32,27 @@ assert.equal(
 expectata: the all-subsets family count is (2^3-1)^3 = 343
 resultata: the count is ${crushMapCount(3, { selfPursuit: true, pursueMany: true, manyPursuers: true })}`,
 )
+assert.equal(
+  connectedCrushMapCount(3, { selfPursuit: true, pursueMany: true, manyPursuers: true }).toString(),
+  '318',
+  `replicata: call connectedCrushMapCount(3, { selfPursuit: true, pursueMany: true, manyPursuers: true })
+expectata: among the 343 all-subsets crush maps on 3 swimmers, exactly 318 are weakly connected
+resultata: the connected count is ${connectedCrushMapCount(3, { selfPursuit: true, pursueMany: true, manyPursuers: true })}`,
+)
+assert.equal(
+  connectedCrushMapCount(6, { selfPursuit: false, pursueMany: false, manyPursuers: true }).toString(),
+  '13800',
+  `replicata: call connectedCrushMapCount(6, { selfPursuit: false, pursueMany: false, manyPursuers: true })
+expectata: among the 15625 no-self crush maps on 6 swimmers, exactly 13800 are weakly connected
+resultata: the connected count is ${connectedCrushMapCount(6, { selfPursuit: false, pursueMany: false, manyPursuers: true })}`,
+)
+assert.equal(
+  connectedCrushMapCount(6, { selfPursuit: false, pursueMany: false, manyPursuers: false }).toString(),
+  '120',
+  `replicata: call connectedCrushMapCount(6, { selfPursuit: false, pursueMany: false, manyPursuers: false })
+expectata: the connected derangements on 6 swimmers are exactly the 6-cycles, so the count is 120
+resultata: the connected count is ${connectedCrushMapCount(6, { selfPursuit: false, pursueMany: false, manyPursuers: false })}`,
+)
 
 const crushes3 = range(crushCount(3)).map(i => nthCrush(3, i))
 const uniq3 = new Set(crushes3.map(c => JSON.stringify(c)))
@@ -94,6 +115,13 @@ assert.deepEqual(
   `replicata: call weakCrushComponents([[1],[2],[0],[4],[3],[3]])
 expectata: the mixed 6-swimmer crush map splits into the 0/1/2 and 3/4/5 components
 resultata: the components are ${JSON.stringify(weakCrushComponents(mix6))}`,
+)
+assert.equal(
+  connectedCrushMap(mix6),
+  false,
+  `replicata: call connectedCrushMap([[1],[2],[0],[4],[3],[3]])
+expectata: the mixed 6-swimmer crush map is disconnected because it has separate 0/1/2 and 3/4/5 weak components
+resultata: connectedCrushMap returned ${connectedCrushMap(mix6)}`,
 )
 
 const seen6 = new Set([...componentKeys(cyc6), ...componentKeys(fork6)])

@@ -47,7 +47,7 @@ const skip = JSON.parse(
     `(() => {
       const mix = [[1],[2],[0],[4],[3],[3]]
       const rankof = want =>
-        range(Number(ncrush)).find(i =>
+        range(Number(rawncrush)).find(i =>
           JSON.stringify(nthCrushMap(ns, BigInt(i), modeopts())) === JSON.stringify(want))
       const mixedRank = rankof(mix)
       const next = nextfreshmap(BigInt(mixedRank))
@@ -55,26 +55,33 @@ const skip = JSON.parse(
         mixedRank,
         nextRank: Number(next.rank),
         nextMap: next.crushmap,
+        connected: connectedCrushMap(next.crushmap),
       })
     })()`,
     skipContext,
   ),
 )
 
-assert.equal(
-  skip.nextRank,
-  skip.mixedRank,
-  `replicata: call nextfreshmap() at the mixed map's raw rank with ?ns=6&self=0&pursue=0&pursuers=1
-expectata: nextfreshmap returns that exact rank because raw enumeration no longer skips maps
-resultata: mixedRank is ${skip.mixedRank} and nextRank is ${skip.nextRank}`,
-)
-
 assert.deepEqual(
   skip.nextMap,
-  [[1], [2], [0], [4], [3], [3]],
+  [[3], [2], [0], [4], [3], [3]],
   `replicata: call nextfreshmap() at the mixed map's raw rank with ?ns=6&self=0&pursue=0&pursuers=1
-expectata: the selected crush map is the mixed map itself because raw enumeration no longer skips maps
+expectata: the mixed map is skipped because it is disconnected, so the selected crush map is the next connected raw map [[3],[2],[0],[4],[3],[3]]
 resultata: the selected crush map is ${JSON.stringify(skip.nextMap)}`,
+)
+assert.equal(
+  skip.nextRank,
+  11632,
+  `replicata: call nextfreshmap() at the mixed map's raw rank with ?ns=6&self=0&pursue=0&pursuers=1
+expectata: the disconnected mixed map at raw rank 11630 is skipped and the next connected raw map is at rank 11632
+resultata: mixedRank is ${skip.mixedRank} and nextRank is ${skip.nextRank}`,
+)
+assert.equal(
+  skip.connected,
+  true,
+  `replicata: call nextfreshmap() at the mixed map's raw rank with ?ns=6&self=0&pursue=0&pursuers=1
+expectata: nextfreshmap only returns weakly connected crush maps
+resultata: connected is ${skip.connected}`,
 )
 
 const countContext = loadApp('?ns=6&self=0&pursue=0&pursuers=1')
@@ -94,9 +101,9 @@ const kept = vm.runInContext(
 
 assert.equal(
   kept,
-  15625,
+  13800,
   `replicata: load the app with ?ns=6&self=0&pursue=0&pursuers=1 and repeatedly call nextfreshmap()
-expectata: raw enumeration visits all 15625 crush maps in rank order
+expectata: exact connected-map enumeration visits only the 13800 weakly connected crush maps in raw-rank order
 resultata: it kept ${kept} maps`,
 )
 
@@ -117,8 +124,8 @@ const centroidKept = vm.runInContext(
 
 assert.equal(
   centroidKept,
-  343,
+  318,
   `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&bias=0 and repeatedly call nextfreshmap()
-expectata: centroid-mode all-checked enumeration still visits the raw 343 crush maps because no exact simulator-level reduction has been applied
+expectata: centroid-mode all-checked enumeration visits only the exact 318 weakly connected crush maps
 resultata: it kept ${centroidKept} maps`,
 )

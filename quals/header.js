@@ -114,7 +114,7 @@ resultata: the title line was ${der.calls[0].s}`,
 assert.deepEqual(
   der.calls.slice(1).map(c => c.s),
   [
-    '5 swimmers, 44 derangements',
+    '5 swimmers, 24 derangements',
     '(800x600 pixels)',
   ],
   `replicata: load the app with ?ns=5&self=0&pursue=0&pursuers=0 and call instructions()
@@ -143,9 +143,9 @@ const multi = loadApp('?ns=3&self=1&pursue=1&pursuers=1')
 vm.runInContext('instructions()', multi.context)
 assert.equal(
   multi.calls[1].s,
-  '3 swimmers, 343 crush maps',
+  '3 swimmers, 318 crush maps',
   `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1 and call instructions()
-expectata: the header shows the raw all-checked count in crush-map mode
+expectata: the header shows the exact connected all-checked count in crush-map mode
 resultata: the left header text was ${multi.calls[1].s}`,
 )
 

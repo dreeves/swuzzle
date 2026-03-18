@@ -234,9 +234,9 @@ resultata: family is ${multiState.family}`,
 )
 assert.equal(
   multiState.ncrush,
-  '343',
+  '318',
   `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1
-expectata: the default centroid bias still uses the raw 343-map all-checked family because no exact simulator-level normalization has been applied
+expectata: the default all-checked mode enumerates only the exact weakly connected crush maps, so the count is 318
 resultata: ncrush is ${multiState.ncrush}`,
 )
 assert.deepEqual(
@@ -260,9 +260,9 @@ const offCentroidContext = loadApp('?ns=3&self=1&pursue=1&pursuers=1&bias=0.3')
 const offCentroidState = state(offCentroidContext)
 assert.equal(
   offCentroidState.ncrush,
-  '343',
+  '318',
   `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&bias=0.3
-expectata: off-centroid bias falls back to the raw 343-map all-checked family
+expectata: off-centroid bias keeps the same exact connected-map count, 318
 resultata: ncrush is ${offCentroidState.ncrush}`,
 )
 const edgeBiasContext = loadApp('?ns=3&self=0&pursue=1&pursuers=1&bias=6')

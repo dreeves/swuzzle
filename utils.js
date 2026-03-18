@@ -163,6 +163,52 @@ function crushMapCount(n, opts = {}) {
   return countbyfamily[family]()
 }
 
+function binom(n, k) {
+  if (!Number.isInteger(n) || !Number.isInteger(k) || k < 0 || k > n)
+    throw new Error(`Expected binom arguments with 0 <= k <= n; got n=${n}, k=${k}`)
+  let num = 1n
+  let den = 1n
+  const j = Math.min(k, n-k)
+  for (let i = 1; i <= j; i++) {
+    num *= BigInt(n-j+i)
+    den *= BigInt(i)
+  }
+  return num / den
+}
+
+function wholeCrushMapCount(n, opts = {}) {
+  if (!Number.isInteger(n) || n < 0)
+    throw new Error(`Expected n to be an integer >= 0; got ${n}`)
+  if (n === 0) return 1n
+  if (n >= 2) return crushMapCount(n, opts)
+  const family = crushFamily(opts)
+  const countbyfamily = {
+    derangements: 0n,
+    crushmaps: 0n,
+    permutations: 1n,
+    endofunctions: 1n,
+    multicrushmaps: 0n,
+    multicrushselfmaps: 1n,
+  }
+  return countbyfamily[family]
+}
+
+const conncache = new Map()
+
+function connectedCrushMapCount(n, opts = {}) {
+  if (!Number.isInteger(n) || n < 1)
+    throw new Error(`Expected n to be an integer >= 1; got ${n}`)
+  if (n === 1) return wholeCrushMapCount(1, opts)
+  const family = crushFamily(opts)
+  const key = `${family}:${n}`
+  if (conncache.has(key)) return conncache.get(key)
+  let cnt = wholeCrushMapCount(n, opts)
+  for (let k = 1; k < n; k++)
+    cnt -= binom(n-1, k-1) * connectedCrushMapCount(k, opts) * wholeCrushMapCount(n-k, opts)
+  conncache.set(key, cnt)
+  return cnt
+}
+
 function nthCrushMap(n, rank, opts = {}) {
   const family = crushFamily(opts)
   const count = crushMapCount(n, opts)
@@ -240,6 +286,10 @@ function weakCrushComponents(crushmap) {
     comps.push(comp.sort((a, b) => a - b))
   }
   return comps
+}
+
+function connectedCrushMap(crushmap) {
+  return weakCrushComponents(crushmap).length === 1
 }
 
 function componentKey(crushmap, comp) {
