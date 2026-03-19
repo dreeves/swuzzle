@@ -189,7 +189,7 @@ function loadApp(search) {
   return context
 }
 
-const context = loadApp('?ns=3&all=0')
+const context = loadApp('?ns=3&self=0&pursue=0&pursuers=0')
 vm.runInContext('setup()', context)
 const ops = context.graphOps
 const blits = context.blits
@@ -197,7 +197,7 @@ const blits = context.blits
 assert.equal(
   ops > 0,
   true,
-  `replicata: load the app with ?ns=3&all=0 and call setup()
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0 and call setup()
 expectata: the mini graph is rendered into its cache during setup
 resultata: the cached mini graph used ${ops} drawing operations`,
 )
@@ -206,14 +206,14 @@ vm.runInContext('draw()', context)
 assert.equal(
   context.graphOps,
   ops,
-  `replicata: load the app with ?ns=3&all=0, call setup(), then call draw() once
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, call setup(), then call draw() once
 expectata: the mini graph cache is reused without rerendering the arrows and nodes
 resultata: the cached mini graph drawing operations changed from ${ops} to ${context.graphOps}`,
 )
 assert.equal(
   context.blits - blits,
   1,
-  `replicata: load the app with ?ns=3&all=0, call setup(), then call draw() once
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, call setup(), then call draw() once
 expectata: the cached mini graph is blitted once onto the overlay during draw()
 resultata: the cached mini graph was blitted ${context.blits - blits} times during draw()`,
 )
@@ -230,7 +230,7 @@ const moved = JSON.parse(
 assert.deepEqual(
   moved.nodes,
   moved.want,
-  `replicata: load the app with ?ns=3&all=0 and call cacheMiniGraph()
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0 and call cacheMiniGraph()
 expectata: the mini graph redraws its nodes at the base mini-swimmer positions
 resultata: the cached node positions were ${JSON.stringify(moved.nodes)} instead of ${JSON.stringify(moved.want)}`,
 )

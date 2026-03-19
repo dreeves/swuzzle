@@ -23,6 +23,8 @@ const rawself = getQueryParam('self')
 const rawpursue = getQueryParam('pursue')
 const rawpursuers = getQueryParam('pursuers')
 const rawbias = getQueryParam('bias')
+const rawspeed = getQueryParam('speed')
+const rawpaused = getQueryParam('paused')
 const biasmin = -6
 const biasmax = 6
 const biasstep = 0.1
@@ -30,6 +32,16 @@ const biasdetent = 0.25
 const minbiasw = 56
 const biaslabw = 54
 const biasreadw = 70
+const stepspec = { sp: 'step', em: '⏸️', title: 'Pause/Step' }
+const speedspecs = [
+  { sp: '1000', em: '🐌', title: 'Snail', simspeed: 0.5, pausems: 1000 },
+  { sp: '500',  em: '🐢', title: 'Turtle', simspeed: 1, pausems: 500 },
+  { sp: '250',  em: '🐇', title: 'Rabbit', simspeed: 3, pausems: 250 },
+  { sp: '100',  em: '🚀', title: 'Rocket', simspeed: 10, pausems: 50 },
+  { sp: '0',    em: '⚡️', title: 'Lightning', simspeed: 30, pausems: 0 },
+]
+const speedvals = speedspecs.map(s => s.sp)
+const speedspec = Object.fromEntries(speedspecs.map(s => [s.sp, s]))
 function edgebias(x) { return x === biasmin ? -Infinity : x === biasmax ? Infinity : x }
 function setpointbias(x) { return Math.abs(edgebias(x)) <= biasdetent ? 0 : edgebias(x) }
 function shownbias(x) { return Number.isFinite(x) ? x : Math.sign(x) * biasmax }
@@ -47,15 +59,21 @@ function numparam(name, raw, def, lo, hi) {
     throw new Error(`Expected ${name} query parameter to be a number from ${lo} to ${hi}; got ${raw}`)
   return v
 }
-const legacyall = rawself === false && rawpursue === false &&
-                  rawpursuers === false && rawall !== false
+function speedparam(raw, def) {
+  const v = raw === false ? def : raw
+  if (!speedvals.includes(v))
+    throw new Error(`Expected speed query parameter to be one of ${speedvals.join(', ')}; got ${raw}`)
+  return v
+}
 let selfPursuit = boolparam('self', rawself, '0')
 let pursueMany = boolparam('pursue', rawpursue, '0')
-let manyPursuers = boolparam('pursuers', rawpursuers, legacyall ? rawall : '0')
+let manyPursuers = boolparam('pursuers', rawpursuers, '0')
 let pursuitBias = setpointbias(numparam('bias', rawbias, 0, biasmin, biasmax))
-if (rawall !== false && rawall !== '0' && rawall !== '1')
-  throw new Error(`Expected all query parameter to be 0 or 1; got ${rawall}`)
-window.history.replaceState({}, null, swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias))
+let runspeed = speedparam(rawspeed, '250')
+let simPaused = boolparam('paused', rawpaused, '0')
+if (rawall !== false)
+  throw new Error(`Expected no all query parameter; got ${rawall}`)
+replaceurl()
 
 let pausems = 250 // milliseconds to pause between derangements / crushmaps
 const infoh = 26/2 // how many pixels high the info lines at the bottom are
@@ -86,10 +104,8 @@ const edgepad = headr + 6
 let simspeed = 3 // principled visual speed multiplier
 const simstep = 0.5 // small enough that the radius-2 trail dots overlap perfectly
 let simsubsteps = Math.round(4 * simspeed) // steps per visual frame
-let simPaused = false
 let simStepPulse = false
 let speedBtns = []
-let activeSpeed = '250'
 const coalescepx = 3
 const heartframes = 36
 const pulseframes = 18
@@ -97,14 +113,6 @@ const hearthue = blink(1)
 const bloopdur = 0.14
 const bloopf0 = 880
 const bloopgain = 0.12
-const speedspecs = [
-  { sp: 'step', em: '⏸️', title: 'Pause/Step' },
-  { sp: '1000', em: '🐌', title: 'Snail' },
-  { sp: '500',  em: '🐢', title: 'Turtle' },
-  { sp: '250',  em: '🐇', title: 'Rabbit' },
-  { sp: '100',  em: '🚀', title: 'Rocket' },
-  { sp: '0',    em: '⚡️', title: 'Lightning' },
-]
 const mingraphsz = 120
 const mingraphpad = 10
 const mingraphr = 40
@@ -155,13 +163,13 @@ function updatemodeboxes() {
 function setbias(newbias) {
   pursuitBias = setpointbias(newbias)
   if (biasSlider) biasSlider.value(shownbias(pursuitBias))
-  window.history.replaceState({}, null, swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias))
+  replaceurl()
   resetscene()
 }
 
 function previewbias(newbias) {
   pursuitBias = edgebias(newbias)
-  window.history.replaceState({}, null, swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias))
+  replaceurl()
   resetscene()
 }
 
@@ -198,6 +206,10 @@ function targetpoints(points, crushmap) {
   return crushmap.map((ids, i) => targetpoint(points, Array.isArray(ids) ? ids : [ids], i))
 }
 
+function samepoints(a, b) {
+  return a.every((p, i) => p[0] === b[i][0] && p[1] === b[i][1])
+}
+
 function activederangement(rank) {
   return derangements[Number(rank)].map(j => [j])
 }
@@ -209,7 +221,7 @@ function graphspan() {
 }
 
 function speedbtnswidth() {
-  return speedspecs.length * buttonsz + (speedspecs.length - 1) * 4
+  return (speedspecs.length + 1) * buttonsz + speedspecs.length * 4
 }
 
 function biaslead() { return min(biaslabw, max(rainwid() - minbiasw, 0)) }
@@ -257,8 +269,22 @@ function instructions(g = screen()) {
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
 }
 
-function swuzurl(n, self, pursue, pursuers, bias) {
-  return `?ns=${n}&self=${self ? 1 : 0}&pursue=${pursue ? 1 : 0}&pursuers=${pursuers ? 1 : 0}&bias=${Number(shownbias(bias).toFixed(1))}`
+function swuzurl(n = ns,
+                 self = selfPursuit,
+                 pursue = pursueMany,
+                 pursuers = manyPursuers,
+                 bias = pursuitBias,
+                 speed = runspeed,
+                 paused = simPaused) {
+  return `?ns=${n}&self=${self ? 1 : 0}&pursue=${pursue ? 1 : 0}&pursuers=${pursuers ? 1 : 0}&bias=${Number(shownbias(bias).toFixed(1))}&speed=${speed}&paused=${paused ? 1 : 0}`
+}
+
+function replaceurl() {
+  window.history.replaceState({}, null, swuzurl())
+}
+
+function pushurl() {
+  window.history.pushState({}, null, swuzurl())
 }
 
 function rainwid() { return max(0, min(rainw, width - 2*rainx)) }
@@ -558,8 +584,7 @@ function spawnhit(i) {
 }
 
 function bloop(hits) {
-  if (!playBloops) return
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  if (!playBloops || !audioCtx) return
 
   const t = audioCtx.currentTime
   const f = bloopf0 * 2 ** (-(hits-1)/18)
@@ -578,6 +603,11 @@ function bloop(hits) {
   gain.connect(audioCtx.destination)
   osc.start(t)
   osc.stop(t + bloopdur)
+}
+
+function unlockaudio() {
+  audioCtx ??= new (window.AudioContext || window.webkitAudioContext)()
+  audioCtx.resume?.()
 }
 
 function updatehits() {
@@ -660,6 +690,15 @@ function composite() {
   image(overlay, 0, 0)
 }
 
+function applyspeed(sp) {
+  const spec = speedspec[sp]
+  if (!spec) throw new Error(`Expected speed spec for ${sp}`)
+  runspeed = sp
+  simspeed = spec.simspeed
+  pausems = spec.pausems
+  simsubsteps = Math.max(1, Math.round(4 * simspeed))
+}
+
 function setSpeed(sp) {
   if (sp === 'step') {
     if (simPaused) {
@@ -667,23 +706,12 @@ function setSpeed(sp) {
       if (coalesced) pauseframes = 0 // Instantly break through pause period
     } else {
       simPaused = true // Pause if running
-      activeSpeed = 'step'
+      replaceurl()
     }
   } else {
     simPaused = false
-    activeSpeed = sp
-    if (sp === '1000') { // Snail
-      simspeed = 0.5; pausems = 1000
-    } else if (sp === '500') { // Turtle
-      simspeed = 1; pausems = 500
-    } else if (sp === '250') { // Rabbit
-      simspeed = 3; pausems = 250
-    } else if (sp === '100') { // Rocket
-      simspeed = 10; pausems = 50
-    } else if (sp === '0') { // Lightning
-      simspeed = 30; pausems = 0
-    }
-    simsubsteps = Math.max(1, Math.round(4 * simspeed))
+    applyspeed(sp)
+    replaceurl()
   }
   updateSpeedButtons()
 }
@@ -695,7 +723,7 @@ function updateSpeedButtons() {
       btn.html(simPaused ? '↩️' : '⏸️')
       btn.style('background-color', (simPaused) ? '#20B2AA' : '#333')
     } else {
-      let isActive = (!simPaused && activeSpeed === sp)
+      let isActive = (!simPaused && runspeed === sp)
       btn.style('background-color', isActive ? '#20B2AA' : '#333')
     }
   })
@@ -772,7 +800,7 @@ function setmode(newns, newself, newpursue, newpursuers) {
   manyPursuers = newpursuers
   recalcmode()
   updatemodeboxes()
-  rage(swuzurl(ns, selfPursuit, pursueMany, manyPursuers, pursuitBias), false)
+  pushurl()
   resetscene()
 }
 
@@ -804,6 +832,7 @@ function cacheMiniGraph() {
 }
 
 function advanceswimmers() {
+  const before = swm.map(([x, y]) => [x, y])
   let allquiesced = false
   for (let i = 0; i < simsubsteps; i++) {
     swm = syncstep(swm, crushes, simstep)
@@ -811,7 +840,7 @@ function advanceswimmers() {
     const tg = targetpoints(swm, crushes)
     allquiesced = swm.every((p, j) => pdist(p, tg[j]) < simstep)
   }
-  return allquiesced
+  return allquiesced || samepoints(before, swm)
 }
 
 // -----------------------------------------------------------------------------
@@ -868,6 +897,7 @@ function draw() {
 }
 
 function setup() {
+  window.onpointerdown = unlockaudio
   createCanvas(windowWidth, windowHeight) // fill the window
   console.log(`Canvas created. Screen is ${width}x${height} pixels`)
   frameRate(60) // 60 fps is about the most it can do
@@ -955,7 +985,7 @@ function setup() {
   biasSlider.changed?.(syncbias)
   biasSlider.elt?.addEventListener('change', syncbias)
   
-  speedspecs.forEach((s, idx) => {
+  ;[stepspec, ...speedspecs].forEach((s, idx) => {
     let b = createButton(s.em)
     b.position(btnpx + idx * (buttonsz + 4), buttony)
     styleButton(b)
@@ -964,7 +994,8 @@ function setup() {
     b.mousePressed(() => setSpeed(s.sp))
     speedBtns.push(b)
   })
-  setSpeed('250') // Initialize default state properly
+  applyspeed(runspeed)
+  updateSpeedButtons()
 
   resetscene()
 

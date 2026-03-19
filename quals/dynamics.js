@@ -145,9 +145,19 @@ function state(context) {
   )
 }
 
+function drawsToCoalesce(context, limit = 5000) {
+  vm.runInContext('setup()', context)
+  let draws = 0
+  for (; draws < limit && !vm.runInContext('coalesced', context); draws++) {
+    vm.runInContext('draw()', context)
+  }
+  return draws
+}
+
 function approx(a, b) { return Math.abs(a - b) < 1e-9 }
 
 const context = loadApp('?ns=2&self=0&pursue=0&pursuers=0')
+const slowContext = loadApp('?ns=2&self=0&pursue=0&pursuers=0&speed=1000')
 
 const sync = JSON.parse(
   vm.runInContext(
@@ -354,28 +364,28 @@ const nextMapState = JSON.parse(
 assert.equal(
   nextMapState.n,
   '1',
-  `replicata: load the app with ?ns=3&all=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
 expectata: the app advances directly to the next crushmap
 resultata: n became ${nextMapState.n}`,
 )
 assert.equal(
   nextMapState.coalesced,
   false,
-  `replicata: load the app with ?ns=3&all=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
 expectata: the app leaves the coalesced state after loading the next crushmap
 resultata: coalesced was ${nextMapState.coalesced}`,
 )
 assert.equal(
   nextMapState.first === nextMapState.second,
   false,
-  `replicata: load the app with ?ns=3&all=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
 expectata: a different crushmap is loaded after the pause
 resultata: the app kept the same crushmap ${nextMapState.first}`,
 )
 assert.deepEqual(
   nextMapState.swm,
   nextMapState.baseswm,
-  `replicata: load the app with ?ns=3&all=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
 expectata: the new crushmap starts from the base swimmer positions
 resultata: swm was ${JSON.stringify(nextMapState.swm)} instead of ${JSON.stringify(nextMapState.baseswm)}`,
 )
@@ -516,14 +526,14 @@ let s = state(context)
 assert.equal(
   approx(s.swm[0][0], 788),
   true,
-  `replicata: load the app with ?ns=2&all=0 and call setup()
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and call setup()
 expectata: swimmer 0 starts inset from the right edge at x=788
 resultata: swimmer 0's x-coordinate is ${s.swm[0][0]}`,
 )
 assert.equal(
   approx(s.swm[1][0], 212),
   true,
-  `replicata: load the app with ?ns=2&all=0 and call setup()
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and call setup()
 expectata: swimmer 1 starts inset from the left edge at x=212
 resultata: swimmer 1's x-coordinate is ${s.swm[1][0]}`,
 )
@@ -550,6 +560,53 @@ assert.equal(
   `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and inspect simsubsteps
 expectata: each rendered frame performs 12 simulation substeps
 resultata: simsubsteps is ${s.simsubsteps}`,
+)
+vm.runInContext('setup()', slowContext)
+const slowState = state(slowContext)
+assert.equal(
+  slowState.simsubsteps,
+  2,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&speed=1000 and inspect simsubsteps
+expectata: snail speed performs 2 simulation substeps per rendered frame
+resultata: simsubsteps is ${slowState.simsubsteps}`,
+)
+const rocketDraws = drawsToCoalesce(loadApp('?ns=2&self=0&pursue=0&pursuers=0&speed=100'))
+const snailDraws = drawsToCoalesce(loadApp('?ns=2&self=0&pursue=0&pursuers=0&speed=1000'))
+assert.equal(
+  snailDraws > rocketDraws,
+  true,
+  `replicata: compare how many draw() calls it takes the first 2-swimmer crushmap to coalesce at speed=1000 versus speed=100
+expectata: the snail URL param makes the same run take more rendered frames than the rocket URL param
+resultata: speed=1000 took ${snailDraws} draw calls and speed=100 took ${rocketDraws}`,
+)
+const pausedContext = loadApp('?ns=2&self=0&pursue=0&pursuers=0&speed=1000&paused=1')
+vm.runInContext('setup()', pausedContext)
+const stepBefore = JSON.parse(vm.runInContext('JSON.stringify(swm)', pausedContext))
+vm.runInContext('draw()', pausedContext)
+const stepAfter = JSON.parse(vm.runInContext('JSON.stringify(swm)', pausedContext))
+assert.deepEqual(
+  stepAfter,
+  stepBefore,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&speed=1000&paused=1, call setup(), then call draw() once
+expectata: paused startup state does not advance until a step gesture
+resultata: swm changed from ${JSON.stringify(stepBefore)} to ${JSON.stringify(stepAfter)}`,
+)
+vm.runInContext('setSpeed("step")', pausedContext)
+vm.runInContext('draw()', pausedContext)
+const steppedState = state(pausedContext)
+assert.equal(
+  approx(steppedState.swm[0][0], 787),
+  true,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&speed=1000&paused=1, call setup(), click the step control once, then call draw()
+expectata: the paused URL preserves the snail run speed, so one manual step advances swimmer 0 by 1 pixel
+resultata: swimmer 0's x-coordinate is ${steppedState.swm[0][0]}`,
+)
+assert.equal(
+  approx(steppedState.swm[1][0], 213),
+  true,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&speed=1000&paused=1, call setup(), click the step control once, then call draw()
+expectata: the paused URL preserves the snail run speed, so one manual step advances swimmer 1 by 1 pixel
+resultata: swimmer 1's x-coordinate is ${steppedState.swm[1][0]}`,
 )
 assert.equal(
   approx(s.swm[0][0], 782),

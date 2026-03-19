@@ -107,7 +107,7 @@ vm.runInContext('instructions()', der.context)
 assert.equal(
   der.calls[0].s.startsWith('Amorous Swimmers'),
   true,
-  `replicata: load the app with ?ns=5&all=0 and call instructions()
+  `replicata: load the app with ?ns=5&self=0&pursue=0&pursuers=0 and call instructions()
 expectata: the title line starts with "Amorous Swimmers" even if a version suffix is appended
 resultata: the title line was ${der.calls[0].s}`,
 )
@@ -129,13 +129,13 @@ expectata: the pixel count ends flush with the right edge of the rainbar at x=42
 resultata: it ended at x=${der.calls[2].x + der.context.textWidth(der.calls[2].s)}`,
 )
 
-const all = loadApp('?ns=3&all=1')
+const all = loadApp('?ns=3&self=0&pursue=0&pursuers=1')
 vm.runInContext('instructions()', all.context)
 assert.equal(
   all.calls[1].s,
   '3 swimmers, 8 crush maps',
-  `replicata: load the app with ?ns=3&all=1 and call instructions()
-expectata: the header shows the swimmer count and crush-map count in all-crush mode
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=1 and call instructions()
+expectata: the header shows the swimmer count and crush-map count in single-target many-pursuers mode
 resultata: the left header text was ${all.calls[1].s}`,
 )
 

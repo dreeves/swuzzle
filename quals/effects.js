@@ -150,7 +150,7 @@ function state(context) {
   )
 }
 
-const context = loadApp('?ns=2&all=0')
+const context = loadApp('?ns=2&self=0&pursue=0&pursuers=0')
 let s = state(context)
 
 vm.runInContext(
@@ -184,28 +184,28 @@ for (let i = 0; i < 1000 && s.hearts.length === 0; i++) {
 assert.equal(
   s.hearts.length,
   2,
-  `replicata: load the app with ?ns=2&all=0 and keep calling draw() until swimmers collide
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and keep calling draw() until swimmers collide
 expectata: the two swimmer-reaches-crush events spawn exactly two floating hearts
 resultata: hearts.length is ${s.hearts.length}`,
 )
 assert.equal(
   s.pulses.length,
   2,
-  `replicata: load the app with ?ns=2&all=0 and keep calling draw() until swimmers collide
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and keep calling draw() until swimmers collide
 expectata: the two swimmer-reaches-crush events spawn exactly two merge pulses
 resultata: pulses.length is ${s.pulses.length}`,
 )
 assert.equal(
   s.hearts.every(h => h.h === s.hearthue),
   true,
-  `replicata: load the app with ?ns=2&all=0 and keep calling draw() until swimmers collide
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and keep calling draw() until swimmers collide
 expectata: every heart uses the zero-distance hue
 resultata: not every heart used hearthue=${s.hearthue}`,
 )
 assert.equal(
   JSON.stringify([s.hearts[0].x, s.hearts[0].y]) !== JSON.stringify([s.hearts[1].x, s.hearts[1].y]),
   true,
-  `replicata: load the app with ?ns=2&all=0 and keep calling draw() until the two simultaneous crush-hit events spawn hearts
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0 and keep calling draw() until the two simultaneous crush-hit events spawn hearts
 expectata: the two hearts start at distinct coordinates so both are visible
 resultata: the heart coordinates were ${JSON.stringify(s.hearts.map(h => [h.x, h.y]))}`,
 )
@@ -217,14 +217,14 @@ s = state(context)
 assert.equal(
   s.hearts[0].y < y,
   true,
-  `replicata: load the app with ?ns=2&all=0, wait for hearts to spawn, then call draw() once more
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0, wait for hearts to spawn, then call draw() once more
 expectata: the hearts float upward during the pause animation
 resultata: the first heart moved from y=${y} to y=${s.hearts[0].y}`,
 )
 assert.equal(
   s.hearts[0].age > age,
   true,
-  `replicata: load the app with ?ns=2&all=0, wait for hearts to spawn, then call draw() once more
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0, wait for hearts to spawn, then call draw() once more
 expectata: the heart animation advances by one frame
 resultata: the first heart age moved from ${age} to ${s.hearts[0].age}`,
 )

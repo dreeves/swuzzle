@@ -15,7 +15,7 @@ function loadApp(search) {
     document: { body: { appendChild() {} } },
     window: {
       location: { search },
-      history: { replaceState() {} },
+      history: { replaceState(_s, _t, url) { context.lastUrl = url } },
     },
     location: { reload() {} },
     HTMLCanvasElement: function HTMLCanvasElement() {},
@@ -148,7 +148,7 @@ function loadApp(search) {
 function state(context) {
   return JSON.parse(
     vm.runInContext(
-      'JSON.stringify({ selfPursuit, pursueMany, manyPursuers, pursuitBias, family, crushes, ncrush: ncrush.toString() })',
+      'JSON.stringify({ selfPursuit, pursueMany, manyPursuers, pursuitBias, family, crushes, ncrush: ncrush.toString(), runspeed, simPaused })',
       context,
     ),
   )
@@ -199,28 +199,12 @@ expectata: the self-pursuit checkbox starts unchecked in derangement mode
 resultata: the checkbox checked state is ${derContext.checks[0].checkedValue}`,
 )
 
-const allContext = loadApp('?ns=3&all=1')
-const allState = state(allContext)
-assert.equal(
-  allState.manyPursuers,
-  true,
+assert.throws(
+  () => loadApp('?ns=3&all=1'),
+  /Expected no all query parameter; got 1/,
   `replicata: load the app with ?ns=3&all=1
-expectata: the legacy all=1 URL still activates the many-pursuers family
-resultata: manyPursuers is ${allState.manyPursuers}`,
-)
-assert.deepEqual(
-  allState.crushes,
-  [[1], [0], [0]],
-  `replicata: load the app with ?ns=3&all=1
-expectata: the initial crush map can be [1,0,0], allowing 0 and 1 to chase each other while 2 chases 0
-resultata: the initial crush map is ${JSON.stringify(allState.crushes)}`,
-)
-assert.equal(
-  allContext.checks[2].checkedValue,
-  true,
-  `replicata: load the app with ?ns=3&all=1
-expectata: the pursuers>1 checkbox starts checked in legacy all-crush mode
-resultata: the checkbox checked state is ${allContext.checks[2].checkedValue}`,
+expectata: undeployed legacy all=1 URLs now fail loudly instead of silently mapping to pursuers=1
+resultata: the app did not throw the expected query-parameter error`,
 )
 
 const multiContext = loadApp('?ns=3&self=1&pursue=1&pursuers=1')
@@ -272,4 +256,67 @@ assert.equal(
   `replicata: load the app with ?ns=3&self=0&pursue=1&pursuers=1&bias=6
 expectata: the right slider endpoint restores positive infinite bias
 resultata: pursuitBias is ${vm.runInContext('pursuitBias', edgeBiasContext)}`,
+)
+
+const speedContext = loadApp('?ns=3&self=0&pursue=0&pursuers=0&speed=100')
+const speedState = state(speedContext)
+assert.equal(
+  speedState.runspeed,
+  '100',
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0&speed=100
+expectata: the speed query parameter restores the rocket speed
+resultata: runspeed is ${speedState.runspeed}`,
+)
+assert.equal(
+  speedContext.lastUrl.includes('speed=100'),
+  true,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0&speed=100
+expectata: the canonicalized URL keeps speed=100
+resultata: lastUrl is ${speedContext.lastUrl}`,
+)
+vm.runInContext('setSpeed("500")', speedContext)
+assert.equal(
+  speedContext.lastUrl.includes('speed=500'),
+  true,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0&speed=100, then call setSpeed("500")
+expectata: changing speed updates the URL to speed=500
+resultata: lastUrl is ${speedContext.lastUrl}`,
+)
+vm.runInContext('setSpeed("step")', speedContext)
+assert.equal(
+  speedContext.lastUrl.includes('speed=500'),
+  true,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0&speed=100, call setSpeed("500"), then call setSpeed("step")
+expectata: pausing does not overwrite the underlying run speed in the URL
+resultata: lastUrl is ${speedContext.lastUrl}`,
+)
+assert.equal(
+  speedContext.lastUrl.includes('paused=1'),
+  true,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0&speed=100, call setSpeed("500"), then call setSpeed("step")
+expectata: pausing sets paused=1 in the URL
+resultata: lastUrl is ${speedContext.lastUrl}`,
+)
+const pausedContext = loadApp('?ns=3&self=0&pursue=0&pursuers=0&speed=500&paused=1')
+const pausedState = state(pausedContext)
+assert.equal(
+  pausedState.runspeed,
+  '500',
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0&speed=500&paused=1
+expectata: the run speed is restored independently of the paused state
+resultata: runspeed is ${pausedState.runspeed}`,
+)
+assert.equal(
+  pausedState.simPaused,
+  true,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0&speed=500&paused=1
+expectata: the paused query parameter restores paused transport state
+resultata: simPaused is ${pausedState.simPaused}`,
+)
+assert.throws(
+  () => loadApp('?ns=3&self=0&pursue=0&pursuers=0&speed=step'),
+  /Expected speed query parameter to be one of 1000, 500, 250, 100, 0; got step/,
+  `replicata: load the app with the legacy URL ?ns=3&self=0&pursue=0&pursuers=0&speed=step
+expectata: undeployed legacy step URLs now fail loudly instead of silently mapping to paused state
+resultata: the app did not throw the expected speed-parameter error`,
 )

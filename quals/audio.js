@@ -199,9 +199,10 @@ function loadApp(search) {
   return { context, tones, contexts, buttons }
 }
 
-const { context, tones, contexts } = loadApp('?ns=3&all=0')
+const { context, tones, contexts } = loadApp('?ns=3&self=0&pursue=0&pursuers=0')
+vm.runInContext('playBloops = true', context)
 vm.runInContext(
-  'swm = [[0,0], [1,0], [10,0]]; ci = [1,2,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
+  'swm = [[0,0], [1,0], [10,0]]; crushes = [[1],[2],[0]]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
   context,
 )
 assert.equal(
@@ -221,7 +222,7 @@ resultata: ${contexts.length} audio contexts were created`,
 )
 // After unlock, hits produce tones synchronously (and each bloop also calls resume)
 vm.runInContext(
-  'swm = [[0,0], [1,0], [10,0]]; ci = [1,2,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
+  'swm = [[0,0], [1,0], [10,0]]; crushes = [[1],[2],[0]]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
   context,
 )
 assert.equal(
@@ -232,9 +233,9 @@ expectata: one bloop is scheduled immediately
 resultata: ${tones.length} bloops were scheduled`,
 )
 
-const one = tones[0].freq
+const one = tones[0].set[0].v
 vm.runInContext(
-  'swm = [[0,0], [0,0], [10,0]]; ci = [1,0,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
+  'swm = [[0,0], [0,0], [10,0]]; crushes = [[1],[0],[0]]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
   context,
 )
 assert.equal(
@@ -245,7 +246,7 @@ expectata: one additional bloop is scheduled for that hit frame
 resultata: ${tones.length} bloops were scheduled total`,
 )
 
-const two = tones[1].freq
+const two = tones[1].set[0].v
 assert.equal(
   two < one,
   true,
@@ -254,38 +255,26 @@ expectata: the two-hit bloop starts at a lower pitch
 resultata: the one-hit frequency was ${one} and the two-hit frequency was ${two}`,
 )
 
-const ctl = loadApp('?ns=3&all=0')
-ctl.buttons[1].onclick()
-assert.equal(
-  ctl.context.reloads,
-  0,
-  `replicata: load the app and use the forward-arrow control as the first user gesture
-expectata: the app updates in place without a page reload so audio can persist
-resultata: location.reload() was called ${ctl.context.reloads} times`,
-)
-assert.equal(
-  ctl.context.pushes,
-  1,
-  `replicata: load the app and use the forward-arrow control as the first user gesture
-expectata: the URL still updates once for the new mode
-resultata: history.pushState() was called ${ctl.context.pushes} times`,
-)
+const ctl = loadApp('?ns=3&self=0&pursue=0&pursuers=0')
+vm.runInContext('playBloops = true', ctl.context)
+vm.runInContext('window.onpointerdown()', ctl.context)
+vm.runInContext('window.onpointerdown()', ctl.context)
 assert.equal(
   ctl.contexts.length,
   1,
-  `replicata: load the app and use the forward-arrow control as the first user gesture
-expectata: that gesture unlocks exactly one audio context
+  `replicata: load the app and trigger two audio-unlock gestures in a row
+expectata: the app reuses the same audio context instead of allocating a second one
 resultata: ${ctl.contexts.length} audio contexts were created`,
 )
 vm.runInContext(
-  'swm = [[0,0], [1,0], [10,0], [20,0]]; ci = [1,2,3,0]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
+  'swm = [[0,0], [1,0], [10,0], [20,0]]; crushes = [[1],[2],[3],[0]]; hearts = []; pulses = []; hitseen = new Set(); updatehits()',
   ctl.context,
 )
 assert.equal(
   ctl.tones.length,
   1,
-  `replicata: load the app, use the forward-arrow control as the first user gesture, then arrange one crush-hit in the new mode
-expectata: one bloop is scheduled after that in-place mode change
+  `replicata: load the app, unlock audio once, then arrange one crush-hit
+expectata: one bloop is scheduled after unlock
 resultata: ${ctl.tones.length} bloops were scheduled`,
 )
 })().catch(err => {
