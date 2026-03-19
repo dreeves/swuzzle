@@ -149,6 +149,16 @@ expectata: the header shows the exact connected all-checked count in crush-map m
 resultata: the left header text was ${multi.calls[1].s}`,
 )
 
+const random = loadApp('?ns=3&self=1&pursue=1&pursuers=1&random=1')
+vm.runInContext('instructions()', random.context)
+assert.equal(
+  random.calls[1].s,
+  '3 swimmers, motus fortuitus',
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1 and call instructions()
+expectata: random mode replaces the crush-map count with the Latin random-motion label
+resultata: the left header text was ${random.calls[1].s}`,
+)
+
 const bias = loadApp('?ns=3&self=0&pursue=1&pursuers=1&bias=2.5')
 vm.runInContext('biaslegend()', bias.context)
 assert.deepEqual(

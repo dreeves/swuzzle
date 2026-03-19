@@ -128,7 +128,9 @@ function loadApp(search) {
       const box = {
         label,
         checkedValue: checked,
-        position() {},
+        x: null,
+        y: null,
+        position(x, y) { this.x = x; this.y = y },
         style() {},
         changed(fn) { this.onchange = fn },
         checked() { return this.checkedValue },
@@ -148,7 +150,7 @@ function loadApp(search) {
 function state(context) {
   return JSON.parse(
     vm.runInContext(
-      'JSON.stringify({ selfPursuit, pursueMany, manyPursuers, pursuitBias, family, crushes, ncrush: ncrush.toString(), runspeed, simPaused })',
+      'JSON.stringify({ selfPursuit, pursueMany, manyPursuers, randomMode, signedRandom, pursuitBias, family, crushes, ncrush: ncrush.toString(), runspeed, simPaused })',
       context,
     ),
   )
@@ -186,9 +188,9 @@ resultata: pursuitBias is ${derState.pursuitBias}`,
 )
 assert.deepEqual(
   derContext.checks.map(c => c.label),
-  ['self-pursuit', 'pursue>1', 'pursuers>1', 'bloops'],
+  ['self-pursuit', 'pursue>1', 'pursuers>1', 'bloops', 'random', 'U[-1,1]'],
   `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0
-expectata: the checkboxes appear in self/pursue/pursuers/bloops order
+expectata: the checkboxes appear in self/pursue/pursuers/bloops/random/U[-1,1] order
 resultata: the checkbox labels were ${JSON.stringify(derContext.checks.map(c => c.label))}`,
 )
 assert.equal(
@@ -197,6 +199,34 @@ assert.equal(
   `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0
 expectata: the self-pursuit checkbox starts unchecked in derangement mode
 resultata: the checkbox checked state is ${derContext.checks[0].checkedValue}`,
+)
+assert.equal(
+  derContext.checks[4].y,
+  derContext.checks[3].y,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0 and inspect the checkbox positions
+expectata: the random checkbox shares the bloops row instead of overlapping the speed-button row
+resultata: the random checkbox y was ${derContext.checks[4].y} while the bloops checkbox y was ${derContext.checks[3].y}`,
+)
+assert.equal(
+  derContext.checks[4].x > derContext.checks[3].x,
+  true,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0 and inspect the checkbox positions
+expectata: the random checkbox sits to the right of bloops
+resultata: the bloops x/y is ${JSON.stringify([derContext.checks[3].x, derContext.checks[3].y])} and the random x/y is ${JSON.stringify([derContext.checks[4].x, derContext.checks[4].y])}`,
+)
+assert.equal(
+  derContext.checks[5].y,
+  derContext.checks[4].y,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0 and inspect the checkbox positions
+expectata: the U[-1,1] checkbox shares the random row
+resultata: the U[-1,1] checkbox y was ${derContext.checks[5].y} while the random checkbox y was ${derContext.checks[4].y}`,
+)
+assert.equal(
+  derContext.checks[5].x > derContext.checks[4].x,
+  true,
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0 and inspect the checkbox positions
+expectata: the U[-1,1] checkbox sits to the right of random
+resultata: the random x/y is ${JSON.stringify([derContext.checks[4].x, derContext.checks[4].y])} and the U[-1,1] x/y is ${JSON.stringify([derContext.checks[5].x, derContext.checks[5].y])}`,
 )
 
 assert.throws(
@@ -229,6 +259,61 @@ assert.deepEqual(
   `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1
 expectata: the first raw all-checked crush map has every swimmer pursuing swimmer 0
 resultata: the initial crush map is ${JSON.stringify(multiState.crushes)}`,
+)
+
+const randomContext = loadApp('?ns=3&self=1&pursue=1&pursuers=1&random=1')
+const randomState = state(randomContext)
+assert.equal(
+  randomState.randomMode,
+  true,
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1
+expectata: random mode restores from the query string
+resultata: randomMode is ${randomState.randomMode}`,
+)
+assert.equal(
+  randomState.signedRandom,
+  true,
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1
+expectata: the U[-1,1] random distribution checkbox defaults to checked
+resultata: signedRandom is ${randomState.signedRandom}`,
+)
+assert.equal(
+  randomState.family,
+  'random',
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1
+expectata: the active family becomes random mode instead of a crush-map family
+resultata: family is ${randomState.family}`,
+)
+assert.equal(
+  randomState.ncrush,
+  '1',
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1
+expectata: random mode is a single scene, so the count is 1
+resultata: ncrush is ${randomState.ncrush}`,
+)
+assert.deepEqual(
+  randomState.crushes,
+  [],
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1
+expectata: random mode does not load a crush map
+resultata: crushes is ${JSON.stringify(randomState.crushes)}`,
+)
+assert.equal(
+  randomContext.lastUrl.includes('random=1') && randomContext.lastUrl.includes('signed=1'),
+  true,
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1
+expectata: the canonical URL preserves random=1 and signed=1
+resultata: the rewritten URL was ${randomContext.lastUrl}`,
+)
+
+const unsignedContext = loadApp('?ns=3&self=1&pursue=1&pursuers=1&random=1&signed=0')
+const unsignedState = state(unsignedContext)
+assert.equal(
+  unsignedState.signedRandom,
+  false,
+  `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1&signed=0
+expectata: signed=0 restores the U[0,1] distribution mode
+resultata: signedRandom is ${unsignedState.signedRandom}`,
 )
 
 const biasContext = loadApp('?ns=3&self=0&pursue=1&pursuers=1&bias=2.5')

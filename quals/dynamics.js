@@ -200,6 +200,217 @@ assert.equal(
 expectata: swimmer 0 moves one pixel toward the centroid of swimmers 1 and 2, so its y-coordinate becomes sqrt(1/2)
 resultata: swimmer 0's new y-coordinate is ${multisync[0][1]}`,
 )
+const randomStep = JSON.parse(
+  vm.runInContext(
+    `JSON.stringify(randomstep([[100,100],[110,100]], [[0,1],[-1,0]], 1))`,
+    context,
+  ),
+)
+assert.equal(
+  approx(randomStep[0][0], 101),
+  true,
+  `replicata: call randomstep([[100,100],[110,100]], [[0,1],[-1,0]], 1)
+expectata: swimmer 0 moves one pixel toward swimmer 1 when its random weight is +1
+resultata: swimmer 0's new x-coordinate is ${randomStep[0][0]}`,
+)
+assert.equal(
+  approx(randomStep[1][0], 111),
+  true,
+  `replicata: call randomstep([[100,100],[110,100]], [[0,1],[-1,0]], 1)
+expectata: swimmer 1 moves one pixel away from swimmer 0 when its random weight is -1
+resultata: swimmer 1's new x-coordinate is ${randomStep[1][0]}`,
+)
+const randomNorm = JSON.parse(
+  vm.runInContext(
+    `JSON.stringify(randomstep([[100,100],[110,100]], [[0,0.25],[-0.25,0]], 1))`,
+    context,
+  ),
+)
+assert.equal(
+  approx(randomNorm[0][0], 101),
+  true,
+  `replicata: call randomstep([[100,100],[110,100]], [[0,0.25],[-0.25,0]], 1)
+expectata: renormalizing the weighted sum makes a nonzero random direction move at constant speed regardless of its raw magnitude
+resultata: swimmer 0's new x-coordinate is ${randomNorm[0][0]}`,
+)
+assert.equal(
+  approx(randomNorm[1][0], 111),
+  true,
+  `replicata: call randomstep([[100,100],[110,100]], [[0,0.25],[-0.25,0]], 1)
+expectata: renormalizing the weighted sum makes swimmer 1 move one pixel even when the raw weight magnitude is 0.25
+resultata: swimmer 1's new x-coordinate is ${randomNorm[1][0]}`,
+)
+const unsignedWeights = JSON.parse(
+  vm.runInContext(
+    `(() => {
+      const oldrandreal = randreal
+      signedRandom = false
+      randreal = (a, b) => (a + b) / 2
+      const weights = genRandomWeights(2)
+      randreal = oldrandreal
+      return JSON.stringify(weights)
+    })()`,
+    context,
+  ),
+)
+assert.deepEqual(
+  unsignedWeights,
+  [[0, 0.5], [0.5, 0]],
+  `replicata: set signedRandom=false and call genRandomWeights(2) with the qual stub randreal(a,b)=(a+b)/2
+expectata: U[0,1] mode samples nonnegative off-diagonal weights, so the midpoint sample is 0.5
+resultata: genRandomWeights(2) returned ${JSON.stringify(unsignedWeights)}`,
+)
+vm.runInContext('signedRandom = true', context)
+const randomEdge = JSON.parse(
+  vm.runInContext(
+    `JSON.stringify({
+      touch: randomstep([[width-headr-0.25,100],[width+100,100]], [[0,1],[0,0]], 1),
+      stop: randomstep([[width-headr,100],[width+100,100]], [[0,1],[0,0]], 1),
+    })`,
+    context,
+  ),
+)
+assert.equal(
+  approx(randomEdge.touch[0][0], 794),
+  true,
+  `replicata: call randomstep([[width-headr-0.25,100],[width+100,100]], [[0,1],[0,0]], 1) on the default 800px-wide screen
+expectata: a swimmer that would step past the right edge lands on the edge at x=794 instead
+resultata: swimmer 0 landed at x=${randomEdge.touch[0][0]}`,
+)
+assert.equal(
+  approx(randomEdge.stop[0][0], 794),
+  true,
+  `replicata: call randomstep([[width-headr,100],[width+100,100]], [[0,1],[0,0]], 1) on the default 800px-wide screen
+expectata: a swimmer already touching the right edge stays put there
+resultata: swimmer 0 landed at x=${randomEdge.stop[0][0]}`,
+)
+
+const randomDrawContext = loadApp('?ns=2&self=0&pursue=0&pursuers=0&random=1')
+const randomDrawState = JSON.parse(
+  vm.runInContext(
+    `(() => {
+      const seq = [0, 1, -1, 0]
+      randreal = () => {
+        const next = seq.shift()
+        if (next === undefined) throw new Error('Expected another random weight')
+        return next
+      }
+      setup()
+      simsubsteps = 1
+      swm = [[100,100],[110,100]]
+      const before = JSON.stringify(randomWeights)
+      draw()
+      draw()
+      return JSON.stringify({ before, after: JSON.stringify(randomWeights), randomWeights, swm, coalesced, n: n.toString() })
+    })()`,
+    randomDrawContext,
+  ),
+)
+assert.deepEqual(
+  randomDrawState.randomWeights,
+  [[0, 1], [-1, 0]],
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, make randreal() yield [0,1,-1,0], and call setup()
+expectata: random mode stores one fixed random weight for each ordered swimmer pair
+resultata: randomWeights is ${JSON.stringify(randomDrawState.randomWeights)}`,
+)
+assert.equal(
+  randomDrawState.after,
+  randomDrawState.before,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, make randreal() yield [0,1,-1,0], call setup(), and then call draw() twice
+expectata: the sampled random weights stay fixed for the whole scene
+resultata: the weights changed from ${randomDrawState.before} to ${randomDrawState.after}`,
+)
+assert.deepEqual(
+  randomDrawState.swm,
+  [[101, 100], [111, 100]],
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, force randomWeights to [[0,1],[-1,0]], set swm=[[100,100],[110,100]], and call draw() twice with simsubsteps=1
+expectata: the random-mode draw path advances at constant speed using the normalized weighted unit-vector field, so the swimmers land at [[101,100],[111,100]]
+resultata: swm is ${JSON.stringify(randomDrawState.swm)}`,
+)
+assert.equal(
+  randomDrawState.coalesced,
+  false,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, force randomWeights to [[0,1],[-1,0]], and call draw() once
+expectata: random mode bypasses the crush-map pause/coalescence state machine
+resultata: coalesced is ${randomDrawState.coalesced} and n is ${randomDrawState.n}`,
+)
+const randomResetContext = loadApp('?ns=2&self=0&pursue=0&pursuers=0&random=1')
+const randomResetState = JSON.parse(
+  vm.runInContext(
+    `(() => {
+      const seq = [0, 0, 0, 0, 0, 1, -1, 0]
+      randreal = () => {
+        const next = seq.shift()
+        if (next === undefined) throw new Error('Expected another random weight')
+        return next
+      }
+      setup()
+      let cleared = 0
+      trail.clear = () => { cleared += 1 }
+      trail.background = () => { cleared += 1 }
+      const first = JSON.stringify(randomWeights)
+      draw()
+      return JSON.stringify({ first, second: JSON.stringify(randomWeights), swm, baseswm, cleared })
+    })()`,
+    randomResetContext,
+  ),
+)
+assert.equal(
+  randomResetState.first === randomResetState.second,
+  false,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, make the first random scene use all-zero weights, and call draw() once
+expectata: a quiescent random scene immediately reloads with a fresh set of random weights
+resultata: the weights stayed at ${randomResetState.first}`,
+)
+assert.deepEqual(
+  randomResetState.swm,
+  randomResetState.baseswm,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, make the first random scene use all-zero weights, and call draw() once
+expectata: after reloading a quiescent random scene, the swimmers restart from the base positions
+resultata: swm was ${JSON.stringify(randomResetState.swm)} instead of ${JSON.stringify(randomResetState.baseswm)}`,
+)
+assert.equal(
+  randomResetState.cleared,
+  0,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, make the first random scene use all-zero weights, stub trail.clear/background after setup(), and call draw() once
+expectata: rolling to the next random scene preserves the existing trail instead of clearing the screen
+resultata: trail.clear/background ran ${randomResetState.cleared} times`,
+)
+const randomCoalesceContext = loadApp('?ns=2&self=0&pursue=0&pursuers=0&random=1')
+const randomCoalesceState = JSON.parse(
+  vm.runInContext(
+    `(() => {
+      const seq = [0, 1, -1, 0, 0, 0.25, 0.75, 0]
+      randreal = () => {
+        const next = seq.shift()
+        if (next === undefined) throw new Error('Expected another random weight')
+        return next
+      }
+      setup()
+      simsubsteps = 1
+      swm = [[100,100],[102,100]]
+      const before = JSON.stringify(randomWeights)
+      draw()
+      return JSON.stringify({ before, after: JSON.stringify(randomWeights), swm, baseswm })
+    })()`,
+    randomCoalesceContext,
+  ),
+)
+assert.equal(
+  randomCoalesceState.before === randomCoalesceState.after,
+  false,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, place the swimmers at [[100,100],[102,100]], and call draw()
+expectata: once all swimmers are inside one coalesced display group, random mode ends the scene and samples fresh weights
+resultata: the weights stayed at ${randomCoalesceState.before}`,
+)
+assert.deepEqual(
+  randomCoalesceState.swm,
+  randomCoalesceState.baseswm,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, place the swimmers at [[100,100],[102,100]], and call draw()
+expectata: once all swimmers coalesce, random mode restarts from the base positions
+resultata: swm was ${JSON.stringify(randomCoalesceState.swm)} instead of ${JSON.stringify(randomCoalesceState.baseswm)}`,
+)
+
 const target0 = JSON.parse(
   vm.runInContext(
     `pursuitBias = 0; JSON.stringify(targetpoint([[0,0],[2,0],[10,0]], [1,2], 0))`,
@@ -388,6 +599,27 @@ assert.deepEqual(
   `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
 expectata: the new crushmap starts from the base swimmer positions
 resultata: swm was ${JSON.stringify(nextMapState.swm)} instead of ${JSON.stringify(nextMapState.baseswm)}`,
+)
+const visualCoalesceState = JSON.parse(
+  vm.runInContext(
+    `(() => {
+      setup()
+      simsubsteps = 1
+      swm = [[100,100],[102,100]]
+      crushes = [[1],[0]]
+      di = [2,2]
+      draw()
+      return JSON.stringify({ coalesced, pauseframes })
+    })()`,
+    context,
+  ),
+)
+assert.equal(
+  visualCoalesceState.coalesced,
+  true,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0, place the swimmers at [[100,100],[102,100]], and call draw()
+expectata: once all swimmers are inside one coalesced display group, the crush-map scene enters the coalesced pause state
+resultata: coalesced was ${visualCoalesceState.coalesced} with pauseframes=${visualCoalesceState.pauseframes}`,
 )
 
 const tiePath = JSON.parse(

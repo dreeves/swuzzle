@@ -22,6 +22,8 @@ const rawall = getQueryParam('all')
 const rawself = getQueryParam('self')
 const rawpursue = getQueryParam('pursue')
 const rawpursuers = getQueryParam('pursuers')
+const rawrandom = getQueryParam('random')
+const rawsigned = getQueryParam('signed')
 const rawbias = getQueryParam('bias')
 const rawspeed = getQueryParam('speed')
 const rawpaused = getQueryParam('paused')
@@ -68,6 +70,8 @@ function speedparam(raw, def) {
 let selfPursuit = boolparam('self', rawself, '0')
 let pursueMany = boolparam('pursue', rawpursue, '0')
 let manyPursuers = boolparam('pursuers', rawpursuers, '0')
+let randomMode = boolparam('random', rawrandom, '0')
+let signedRandom = boolparam('signed', rawsigned, '1')
 let pursuitBias = setpointbias(numparam('bias', rawbias, 0, biasmin, biasmax))
 let runspeed = speedparam(rawspeed, '250')
 let simPaused = boolparam('paused', rawpaused, '0')
@@ -127,10 +131,13 @@ let audioCtx
 let trail
 let mingraph
 let overlay
+let randomWeights = []
 let nsInput
 let selfBox
 let pursueBox
 let pursuersBox
+let randomBox
+let signedBox
 let biasSlider
 
 const familylabel = {
@@ -148,7 +155,7 @@ function modeopts() {
 
 function modencrush() { return Number(ncrush) }
 
-function currentmode() { return crushFamily(modeopts()) }
+function currentmode() { return randomMode ? 'random' : crushFamily(modeopts()) }
 
 function nthmap(rank) {
   if (family === 'derangements') return activederangement(rank)
@@ -157,7 +164,13 @@ function nthmap(rank) {
 
 function updatemodeboxes() {
   if (!pursueBox) return
-  pursueBox.style('opacity', manyPursuers ? '1' : '0.45')
+  selfBox.style('opacity', randomMode ? '0.45' : '1')
+  pursueBox.style('opacity', !randomMode && manyPursuers ? '1' : '0.45')
+  pursuersBox.style('opacity', randomMode ? '0.45' : '1')
+  signedBox?.style('opacity', randomMode ? '1' : '0.45')
+  if (signedBox?.elt) signedBox.elt.disabled = !randomMode
+  biasSlider?.style('opacity', randomMode ? '0.45' : '1')
+  if (biasSlider?.elt) biasSlider.elt.disabled = randomMode
 }
 
 function setbias(newbias) {
@@ -178,6 +191,57 @@ function avgpoint(pts) {
     (a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length],
     [0, 0],
   )
+}
+
+function vecnorm(v) { return sqrt(v[0] ** 2 + v[1] ** 2) }
+
+function genRandomWeights(n) {
+  const wlo = signedRandom ? -1 : 0
+  return range(n).map(i => {
+    const row = range(n).map(() => randreal(wlo, 1))
+    row[i] = 0
+    return row
+  })
+}
+
+function randomVector(points, weights, swimmer) {
+  const p = points[swimmer]
+  const v = [0, 0]
+  for (let j = 0; j < points.length; j++) {
+    const d = pdist(p, points[j])
+    if (d === 0) continue
+    v[0] += weights[swimmer][j] * (points[j][0] - p[0]) / d
+    v[1] += weights[swimmer][j] * (points[j][1] - p[1]) / d
+  }
+  return [v[0] / (points.length - 1), v[1] / (points.length - 1)]
+}
+
+function randomVectors(points, weights) {
+  return points.map((_, i) => randomVector(points, weights, i))
+}
+
+function screenlims() {
+  return { l: headr, r: width - headr, t: headr, b: height - headr }
+}
+
+function edgehit(p) {
+  const { l, r, t, b } = screenlims()
+  return p[0] <= l || p[0] >= r || p[1] <= t || p[1] >= b
+}
+
+function screenclip(p) {
+  const { l, r, t, b } = screenlims()
+  return [min(max(p[0], l), r), min(max(p[1], t), b)]
+}
+
+function randomstep(points, weights, step) {
+  const dirs = randomVectors(points, weights)
+  return points.map((p, i) => {
+    if (edgehit(p)) return p
+    const d = vecnorm(dirs[i])
+    if (d === 0) return p
+    return screenclip([p[0] + step * dirs[i][0] / d, p[1] + step * dirs[i][1] / d])
+  })
 }
 
 function targetpoint(points, ids, swimmer) {
@@ -239,10 +303,10 @@ function biaslabely() { return lscale(biaslead(), 0, biaslabw, biasy() - 2, bias
 function recalcmode() {
   family = currentmode()
   derangements = family === 'derangements' ? allDerangements(ns) : []
-  rawncrush = family === 'derangements' ?
+  rawncrush = family === 'random' ? 1n : family === 'derangements' ?
     BigInt(derangements.length) :
     crushMapCount(ns, modeopts())
-  ncrush = connectedCrushMapCount(ns, modeopts())
+  ncrush = family === 'random' ? 1n : connectedCrushMapCount(ns, modeopts())
 }
 
 recalcmode()
@@ -263,7 +327,10 @@ function instructions(g = screen()) {
   g.textSize(15)
   const rw = rainwid()
   const pixline = `(${width}x${height} pixels)`
-  const countline = `${ns} swimmers, ${ncrush.toString()} ${familylabel[family]}`
+  // TODO: Recommend English webcopy "random motion".
+  const countline = randomMode ?
+    `${ns} swimmers, motus fortuitus` :
+    `${ns} swimmers, ${ncrush.toString()} ${familylabel[family]}`
   g.text('Amorous Swimmers', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
@@ -273,10 +340,12 @@ function swuzurl(n = ns,
                  self = selfPursuit,
                  pursue = pursueMany,
                  pursuers = manyPursuers,
+                 random = randomMode,
+                 signed = signedRandom,
                  bias = pursuitBias,
                  speed = runspeed,
                  paused = simPaused) {
-  return `?ns=${n}&self=${self ? 1 : 0}&pursue=${pursue ? 1 : 0}&pursuers=${pursuers ? 1 : 0}&bias=${Number(shownbias(bias).toFixed(1))}&speed=${speed}&paused=${paused ? 1 : 0}`
+  return `?ns=${n}&self=${self ? 1 : 0}&pursue=${pursue ? 1 : 0}&pursuers=${pursuers ? 1 : 0}&random=${random ? 1 : 0}&signed=${signed ? 1 : 0}&bias=${Number(shownbias(bias).toFixed(1))}&speed=${speed}&paused=${paused ? 1 : 0}`
 }
 
 function replaceurl() {
@@ -311,7 +380,7 @@ function curprog() {
   return init === 0 ? 1 : 1 - remsum() / init
 }
 
-function progfrac() { return (Number(n) + curprog()) / modencrush() }
+function progfrac() { return randomMode ? 1 : (Number(n) + curprog()) / modencrush() }
 
 // Fill the rainbow bar proportionally to progress (0 to 1)
 function rainfill(frac, g = screen()) {
@@ -547,9 +616,15 @@ function swmgroups(points = swm) {
   return groups
 }
 
+function allcoalesced(points = swm) { return swmgroups(points).length === 1 }
+
 function traildots(g = screen()) {
-  const tg = targetpoints(swm, crushes)
-  const fracs = swm.map((p, i) => di[i] === 0 ? 1 : 1 - pdist(p, tg[i]) / di[i])
+  const fracs = randomMode ?
+    randomVectors(swm, randomWeights).map(v => min(1, vecnorm(v))) :
+    (() => {
+      const tg = targetpoints(swm, crushes)
+      return swm.map((p, i) => di[i] === 0 ? 1 : 1 - pdist(p, tg[i]) / di[i])
+    })()
   for (let i = 0; i < swm.length; i++) {
     tracedot(g, swm[i], fracs[i])
   }
@@ -750,7 +825,18 @@ function nextfreshmap(rank) {
   return null
 }
 
+function loadRandomScene() {
+  randomWeights = genRandomWeights(ns)
+  crushes = []
+  swm = baseswm.map(([x, y]) => [x, y])
+  di = range(swm.length).map(() => 0)
+  hitseen = new Set()
+  cacheMiniGraph()
+  return true
+}
+
 function loadCrushMap() {
+  randomWeights = []
   const next = nextfreshmap(ri)
   if (!next) return false
   ri = next.rank + 1n
@@ -763,6 +849,21 @@ function loadCrushMap() {
   hitseen = new Set()
   cacheMiniGraph()
   return true
+}
+
+function loadScene() {
+  return randomMode ? loadRandomScene() : loadCrushMap()
+}
+
+function nextRandomScene() {
+  pauseframes = 0
+  coalesced = false
+  pulses = []
+  hearts = []
+  if (!loadRandomScene())
+    throw new Error('Expected random scene')
+  drawoverlay(swmgroups())
+  composite()
 }
 
 function resetscene() {
@@ -780,7 +881,7 @@ function resetscene() {
   graphcorner = bestCorner(baseswm)
   minipos = genMiniSwimmers(ns, mingraphsz/2 + mingraphpad,
                             mingraphsz/2 + mingraphpad, mingraphr)
-  if (!loadCrushMap())
+  if (!loadScene())
     throw new Error('Expected at least one crush map')
   si = range(swm.length).map(x => 1)
   instructions(trail)
@@ -793,11 +894,13 @@ function resetscene() {
   window.loop?.()
 }
 
-function setmode(newns, newself, newpursue, newpursuers) {
+function setmode(newns, newself, newpursue, newpursuers, newrandom = randomMode, newsigned = signedRandom) {
   ns = newns
   selfPursuit = newself
   pursueMany = newpursue
   manyPursuers = newpursuers
+  randomMode = newrandom
+  signedRandom = newsigned
   recalcmode()
   updatemodeboxes()
   pushurl()
@@ -809,6 +912,19 @@ function syncstep(points, crushes, step) {
   return points.map((p, i) => pairstep(p, tg[i], step))
 }
 
+function advanceswimmersrandom() {
+  const before = swm.map(([x, y]) => [x, y])
+  let sceneover = allcoalesced(swm)
+  for (let i = 0; i < simsubsteps && !sceneover; i++) {
+    const next = randomstep(swm, randomWeights, simstep)
+    sceneover = samepoints(next, swm)
+    swm = next
+    traildots(trail)
+    sceneover ||= allcoalesced(swm)
+  }
+  return sceneover || samepoints(before, swm)
+}
+
 function cacheMiniGraph() {
   mingraph.clear()
   mingraph.noStroke()
@@ -816,9 +932,10 @@ function cacheMiniGraph() {
   mingraph.rect(0, 0, mingraphsz + 2*mingraphpad, mingraphsz + 2*mingraphpad)
   const pts = minipos
 
-  for (let i = 0; i < ns; i++) {
-    crushes[i].filter(j => j !== i).forEach(j => drawArrow(mingraph, pts[i], pts[j], 4))
-  }
+  if (!randomMode)
+    for (let i = 0; i < ns; i++) {
+      crushes[i].filter(j => j !== i).forEach(j => drawArrow(mingraph, pts[i], pts[j], 4))
+    }
 
   for (let i = 0; i < ns; i++) {
     mingraph.noStroke()
@@ -833,14 +950,14 @@ function cacheMiniGraph() {
 
 function advanceswimmers() {
   const before = swm.map(([x, y]) => [x, y])
-  let allquiesced = false
-  for (let i = 0; i < simsubsteps; i++) {
+  let sceneover = allcoalesced(swm)
+  for (let i = 0; i < simsubsteps && !sceneover; i++) {
     swm = syncstep(swm, crushes, simstep)
     traildots(trail)
     const tg = targetpoints(swm, crushes)
-    allquiesced = swm.every((p, j) => pdist(p, tg[j]) < simstep)
+    sceneover = swm.every((p, j) => pdist(p, tg[j]) < simstep) || allcoalesced(swm)
   }
-  return allquiesced || samepoints(before, swm)
+  return sceneover || samepoints(before, swm)
 }
 
 // -----------------------------------------------------------------------------
@@ -854,6 +971,20 @@ function draw() {
     return
   }
   simStepPulse = false
+
+  if (randomMode) {
+    if (advanceswimmersrandom()) {
+      nextRandomScene()
+      return
+    }
+    const groups = swmgroups()
+    agefx()
+    drawoverlay(groups)
+    rainfill(1, trail)
+    composite()
+    drawfx()
+    return
+  }
 
   // During pause, keep heads visible at coalesced positions
   if (coalesced) {
@@ -932,7 +1063,7 @@ function setup() {
   nsInput.input(() => {
     let v = parseInt(nsInput.value())
     if (v >= nsmin && v <= nsmax && v !== ns) {
-      setmode(v, selfPursuit, pursueMany, manyPursuers)
+      setmode(v, selfPursuit, pursueMany, manyPursuers, randomMode, signedRandom)
     }
   })
   px += 58
@@ -948,25 +1079,38 @@ function setup() {
   selfBox = createCheckbox('self-pursuit', selfPursuit)
   selfBox.position(px, buttony)
   styleCheckbox(selfBox)
-  selfBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked()))
+  selfBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked(), randomBox.checked(), signedBox.checked()))
 
   pursueBox = createCheckbox('pursue>1', pursueMany)
   pursueBox.position(px, buttony + 20)
   styleCheckbox(pursueBox)
-  pursueBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked()))
+  pursueBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked(), randomBox.checked(), signedBox.checked()))
 
   pursuersBox = createCheckbox('pursuers>1', manyPursuers)
   pursuersBox.position(px, buttony + 40)
   styleCheckbox(pursuersBox)
-  pursuersBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked()))
-  updatemodeboxes()
-  
+  pursuersBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked(), randomBox.checked(), signedBox.checked()))
+
+  const sideboxx = px + 115
+  const sideboxy = buttony + 40
+
   const bloopBox = createCheckbox('bloops', playBloops)
-  bloopBox.position(px + 115, buttony + 40)
+  bloopBox.position(sideboxx, sideboxy)
   styleCheckbox(bloopBox)
   bloopBox.changed(() => {
     playBloops = bloopBox.checked()
   })
+
+  randomBox = createCheckbox('random', randomMode)
+  randomBox.position(sideboxx + 76, sideboxy)
+  styleCheckbox(randomBox)
+  randomBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked(), randomBox.checked(), signedBox.checked()))
+
+  signedBox = createCheckbox('U[-1,1]', signedRandom)
+  signedBox.position(sideboxx + 160, sideboxy)
+  styleCheckbox(signedBox)
+  signedBox.changed(() => setmode(ns, selfBox.checked(), pursueBox.checked(), pursuersBox.checked(), randomBox.checked(), signedBox.checked()))
+  updatemodeboxes()
 
   px += 225 // no longer used for buttons directly
   
@@ -984,6 +1128,7 @@ function setup() {
   biasSlider.input(dragbias)
   biasSlider.changed?.(syncbias)
   biasSlider.elt?.addEventListener('change', syncbias)
+  updatemodeboxes()
   
   ;[stepspec, ...speedspecs].forEach((s, idx) => {
     let b = createButton(s.em)
