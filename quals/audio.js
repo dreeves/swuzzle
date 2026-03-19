@@ -277,6 +277,21 @@ assert.equal(
 expectata: one bloop is scheduled after unlock
 resultata: ${ctl.tones.length} bloops were scheduled`,
 )
+
+const randomCtl = loadApp('?ns=2&self=0&pursue=0&pursuers=0&random=1')
+vm.runInContext('playBloops = true', randomCtl.context)
+vm.runInContext('window.onpointerdown()', randomCtl.context)
+vm.runInContext(
+  'simsubsteps = 1; swm = [[100,100], [103.4,100]]; randomWeights = [[0,1], [1,0]]; draw()',
+  randomCtl.context,
+)
+assert.equal(
+  randomCtl.tones.length,
+  1,
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, unlock audio, place two swimmers just outside the coalescence radius with positive mutual weights, and call draw()
+expectata: random mode schedules one bloop when the displayed swimmer-group count drops
+resultata: ${randomCtl.tones.length} bloops were scheduled`,
+)
 })().catch(err => {
   console.error(err)
   process.exit(1)

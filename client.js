@@ -616,7 +616,9 @@ function swmgroups(points = swm) {
   return groups
 }
 
-function allcoalesced(points = swm) { return swmgroups(points).length === 1 }
+function groupcount(points = swm) { return swmgroups(points).length }
+
+function allcoalesced(points = swm) { return groupcount(points) === 1 }
 
 function traildots(g = screen()) {
   const fracs = randomMode ?
@@ -914,13 +916,17 @@ function syncstep(points, crushes, step) {
 
 function advanceswimmersrandom() {
   const before = swm.map(([x, y]) => [x, y])
-  let sceneover = allcoalesced(swm)
+  let groups = groupcount(swm)
+  let sceneover = groups === 1
   for (let i = 0; i < simsubsteps && !sceneover; i++) {
     const next = randomstep(swm, randomWeights, simstep)
+    const nextgroups = groupcount(next)
     sceneover = samepoints(next, swm)
+    groups > nextgroups && bloop(groups - nextgroups)
     swm = next
+    groups = nextgroups
     traildots(trail)
-    sceneover ||= allcoalesced(swm)
+    sceneover ||= groups === 1
   }
   return sceneover || samepoints(before, swm)
 }
