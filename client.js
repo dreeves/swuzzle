@@ -327,9 +327,8 @@ function instructions(g = screen()) {
   g.textSize(15)
   const rw = rainwid()
   const pixline = `(${width}x${height} pixels)`
-  // TODO: Recommend English webcopy "random motion".
   const countline = randomMode ?
-    `${ns} swimmers, motus fortuitus` :
+    `${ns} swimmers, random motion` :
     `${ns} swimmers, ${ncrush.toString()} ${familylabel[family]}`
   g.text('Amorous Swimmers', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
@@ -393,13 +392,10 @@ function rainfill(frac, g = screen()) {
 }
 
 function biaslegend(g = screen()) {
-  // TODO: update quals with these english labels, signed: the human
-  // TODO: Recommend English webcopy "pursue:".
   const biaslabel = 'pursue:'
   const left = 'near'
   const mid = 'centroid'
   const right = 'far'
-  // TODO: Recommend English webcopy "beta=".
   const beta = `β=${Number.isFinite(pursuitBias) ? pursuitBias.toFixed(1) : (pursuitBias < 0 ? '-∞' : '∞')}`
   const y = biasy() + 26
   const x = biasx()
