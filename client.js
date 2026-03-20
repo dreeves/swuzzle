@@ -16,7 +16,7 @@ nextperm, nthperm,
 
 const nsmin = 2
 const nsmax = 9
-const rawns = getQueryParam('ns', `${nsmin}`)
+const rawns = getQueryParam('ns', 3)
 let ns = Number(rawns)
 const rawall = getQueryParam('all')
 const rawself = getQueryParam('self')
@@ -329,7 +329,7 @@ function instructions(g = screen()) {
   const rw = rainwid()
   const pixline = `(${width}x${height} pixels)`
   const countline = randomMode ?
-    `${ns} swimmers, motus fortuitus` :
+    `${ns} swimmers, infinite random paths` :
     `${ns} swimmers, ${ncrush.toString()} ${familylabel[family]}`
   g.text('Amorous Swimmers', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)

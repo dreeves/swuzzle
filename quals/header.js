@@ -180,9 +180,9 @@ const random = loadApp('?ns=3&self=1&pursue=1&pursuers=1&random=1')
 vm.runInContext('instructions()', random.context)
 assert.equal(
   random.calls[1].s,
-  '3 swimmers, motus fortuitus',
+  '3 swimmers, infinite random paths',
   `replicata: load the app with ?ns=3&self=1&pursue=1&pursuers=1&random=1 and call instructions()
-expectata: random mode replaces the crush-map count with the Latin random-motion label
+expectata: random mode replaces the crush-map count with the random-motion label
 resultata: the left header text was ${random.calls[1].s}`,
 )
 
