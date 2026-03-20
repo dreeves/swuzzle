@@ -127,6 +127,7 @@ let pulses = []
 let hearts = []
 let hitseen = new Set()
 let playBloops = false
+let scenes = 0n
 let audioCtx
 let trail
 let mingraph
@@ -328,11 +329,20 @@ function instructions(g = screen()) {
   const rw = rainwid()
   const pixline = `(${width}x${height} pixels)`
   const countline = randomMode ?
-    `${ns} swimmers, random motion` :
+    `${ns} swimmers, motus fortuitus` :
     `${ns} swimmers, ${ncrush.toString()} ${familylabel[family]}`
   g.text('Amorous Swimmers', 5, 15)
   g.text(countline, 5, rainy + rainh + 15)
   g.text(pixline, rainx + rw - g.textWidth(pixline), rainy + rainh + 15)
+}
+
+function swimlabel(total = scenes + 1n) { return `${total.toString()} swims` }
+
+function drawswims(g = screen(), total = scenes + 1n) {
+  g.stroke('Black'); g.fill('White')
+  g.textSize(15)
+  const s = swimlabel(total)
+  g.text(s, uiright() - g.textWidth(s), 15)
 }
 
 function swuzurl(n = ns,
@@ -755,6 +765,7 @@ function drawoverlay(groups, points = swm) {
   overlay.clear()
   drawHeads(groups, points)
   drawMiniGraph(overlay)
+  drawswims(overlay)
 }
 
 function composite() {
@@ -858,6 +869,7 @@ function nextRandomScene() {
   coalesced = false
   pulses = []
   hearts = []
+  scenes += 1n
   if (!loadRandomScene())
     throw new Error('Expected random scene')
   drawoverlay(swmgroups())
@@ -866,6 +878,7 @@ function nextRandomScene() {
 
 function resetscene() {
   n = 0n
+  scenes = 0n
   ri = 0n
   pauseframes = 0
   coalesced = false
@@ -1001,8 +1014,10 @@ function draw() {
     }
     coalesced = false
     n += 1n
+    scenes += 1n
     if (!loadCrushMap()) {
       overlay.clear()
+      drawswims(overlay, scenes)
       rainfill(1, trail)
       composite()
       noLoop()

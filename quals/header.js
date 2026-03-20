@@ -129,6 +129,33 @@ expectata: the pixel count ends flush with the right edge of the rainbar at x=42
 resultata: it ended at x=${der.calls[2].x + der.context.textWidth(der.calls[2].s)}`,
 )
 
+const swims = loadApp('?ns=5&self=0&pursue=0&pursuers=0')
+vm.runInContext('drawswims()', swims.context)
+assert.equal(
+  swims.calls[0].s,
+  '1 swims',
+  `replicata: load the app with ?ns=5&self=0&pursue=0&pursuers=0 and call drawswims()
+expectata: the running scene counter starts at "1 swims" on the first animated scene
+resultata: the top-right header text was ${swims.calls[0].s}`,
+)
+assert.equal(
+  swims.calls[0].x + swims.context.textWidth(swims.calls[0].s),
+  427,
+  `replicata: load the app with ?ns=5&self=0&pursue=0&pursuers=0 and call drawswims()
+expectata: the running scene counter ends flush with the right edge of the rainbar at x=427
+resultata: it ended at x=${swims.calls[0].x + swims.context.textWidth(swims.calls[0].s)}`,
+)
+
+const later = loadApp('?ns=5&self=0&pursue=0&pursuers=0')
+vm.runInContext('scenes = 11n; drawswims()', later.context)
+assert.equal(
+  later.calls[0].s,
+  '12 swims',
+  `replicata: load the app with ?ns=5&self=0&pursue=0&pursuers=0, set scenes=11, and call drawswims()
+expectata: the running scene counter shows the current scene ordinal as completed-scenes-plus-one
+resultata: the top-right header text was ${later.calls[0].s}`,
+)
+
 const all = loadApp('?ns=3&self=0&pursue=0&pursuers=1')
 vm.runInContext('instructions()', all.context)
 assert.equal(

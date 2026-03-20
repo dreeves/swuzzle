@@ -350,7 +350,7 @@ const randomResetState = JSON.parse(
       trail.background = () => { cleared += 1 }
       const first = JSON.stringify(randomWeights)
       draw()
-      return JSON.stringify({ first, second: JSON.stringify(randomWeights), swm, baseswm, cleared })
+      return JSON.stringify({ first, second: JSON.stringify(randomWeights), swm, baseswm, cleared, scenes: scenes.toString() })
     })()`,
     randomResetContext,
   ),
@@ -375,6 +375,13 @@ assert.equal(
   `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, make the first random scene use all-zero weights, stub trail.clear/background after setup(), and call draw() once
 expectata: rolling to the next random scene preserves the existing trail instead of clearing the screen
 resultata: trail.clear/background ran ${randomResetState.cleared} times`,
+)
+assert.equal(
+  randomResetState.scenes,
+  '1',
+  `replicata: load the app with ?ns=2&self=0&pursue=0&pursuers=0&random=1, make the first random scene use all-zero weights, and call draw() once
+expectata: rolling to the next random scene increments the running scene counter to 1 completed scene
+resultata: scenes became ${randomResetState.scenes}`,
 )
 const randomCoalesceContext = loadApp('?ns=2&self=0&pursue=0&pursuers=0&random=1')
 const randomCoalesceState = JSON.parse(
@@ -562,6 +569,7 @@ const nextMapState = JSON.parse(
         first,
         second: JSON.stringify(crushes),
         n: n.toString(),
+        scenes: scenes.toString(),
         coalesced,
         swm,
         baseswm,
@@ -599,6 +607,13 @@ assert.deepEqual(
   `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
 expectata: the new crushmap starts from the base swimmer positions
 resultata: swm was ${JSON.stringify(nextMapState.swm)} instead of ${JSON.stringify(nextMapState.baseswm)}`,
+)
+assert.equal(
+  nextMapState.scenes,
+  '1',
+  `replicata: load the app with ?ns=3&self=0&pursue=0&pursuers=0, let the first crushmap coalesce, set pauseframes to 0, and call draw()
+expectata: advancing to the second crushmap increments the running scene counter to 1 completed scene
+resultata: scenes became ${nextMapState.scenes}`,
 )
 const visualCoalesceState = JSON.parse(
   vm.runInContext(
